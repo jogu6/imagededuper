@@ -73,6 +73,9 @@ BASE_START_DONE = 0
 BASE_START_TIME = 0.0
 MOVE_START_TIME = 0.0  # 全体開始時間
 
+TOTAL_SOURCE_IMAGES = 0
+PROCESSED_BASE_COUNT = 0
+
 RESUME_FILE_NAME = "resume.json"
 
 def quit_requested():
@@ -172,6 +175,18 @@ def _write_traceback_log(desc: str, exc: Exception):
             for line in tb_text.strip().splitlines():
                 f.write(f"{ts} {line}\n")
             f.write("─" * 50 + "\n")
+
+
+def format_duration(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def log_processing_stats(label: str):
+    elapsed = time.time() - MOVE_START_TIME if MOVE_START_TIME else 0.0
+    log(f"[{label}] 経過時間: {format_duration(elapsed)} / 処理済み元画像数: {PROCESSED_BASE_COUNT}/{TOTAL_SOURCE_IMAGES}")
 
 
 # ============================================
@@ -631,6 +646,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     global CURRENT_PROGRESS, TOTAL_PROGRESS, CURRENT_ETA_STR
     global PROGRESS_MODE, BASE_START_DONE, BASE_START_TIME, MOVE_START_TIME
     global W_IMAGES, W_SIZES, W_PATHS, W_PHASHES, W_RESOLUTIONS
+    global TOTAL_SOURCE_IMAGES, PROCESSED_BASE_COUNT
 
     resume_path = os.path.join(folder_path, RESUME_FILE_NAME)
     resume = load_resume(resume_path)
@@ -641,17 +657,22 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         start_j = int(resume["j"])
         moved = set(resume["moved"])
         CURRENT_PROGRESS = int(resume.get("current_progress", 0))
+        PROCESSED_BASE_COUNT = start_i
         log(f"[⏸️→▶️ 再開] i={start_i}, j={start_j} から再開するわ。")
     else:
         start_i = 0
         start_j = 1  # 最初のペアは (0,1)
         moved = set()
         CURRENT_PROGRESS = 0
+        PROCESSED_BASE_COUNT = 0
 
     moved_before = set(moved)   # ★ 今回実行前の moved を保存
 
 
     log(f"=== 開始: 重複画像チェック {folder_path} ===")
+    MOVE_START_TIME = time.time()
+    TOTAL_SOURCE_IMAGES = 0
+    PROCESSED_BASE_COUNT = 0
 
     exts = (".jpg", ".jpeg", ".png", ".bmp", ".gif",
             ".tiff", ".webp", ".jfif", ".heic", ".heif")
@@ -669,6 +690,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
     if not all_files:
         log("画像が1枚もないので終了するわ。")
+        log_processing_stats("完了")
         return
 
     # 収集後すぐ
@@ -707,10 +729,13 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     cached = cache_all_images(final)
     if cached is None:
         log("読み込みが中断されたから、比較処理には進まずに終了するわ。")
+        log_processing_stats("中断")
         return
 
     cached_paths, cached_images, cached_sizes, cached_phashes, cached_resolutions = cached
     n = len(cached_paths)
+    TOTAL_SOURCE_IMAGES = n
+    PROCESSED_BASE_COUNT = 0
 
     # ============================================
     # ★ 追加1：pHash順ソートで比較順最適化
@@ -726,6 +751,8 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     # 再ソート後の枚数 n は変わらない
     if n < 2:
         log("比較対象が1枚しかないから処理することがないわ。")
+        PROCESSED_BASE_COUNT = n
+        log_processing_stats("完了")
         return
 
     total_pairs = n * (n - 1) // 2
@@ -741,14 +768,14 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     PROGRESS_MODE = "compare"
     BASE_START_DONE = 0
     BASE_START_TIME = time.time()
-    MOVE_START_TIME = time.time()
     print_compare_progress(0, total_pairs)
 
     # 比較元が変わったときに呼ばれる
     def on_new_base(i: int):
-        global BASE_START_DONE, BASE_START_TIME, CURRENT_ETA_STR
+        global BASE_START_DONE, BASE_START_TIME, CURRENT_ETA_STR, PROCESSED_BASE_COUNT
         BASE_START_DONE = CURRENT_PROGRESS
         BASE_START_TIME = time.time()
+        PROCESSED_BASE_COUNT = i
 
         # ETA をここで一度だけ再計算
         total_pairs = TOTAL_PROGRESS
@@ -914,9 +941,9 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
         ni, nj = compute_next_pair(last_i, last_j, n)
         save_resume(resume_path, ni, nj, moved, CURRENT_PROGRESS)
-        log("中断操作を検出したから、中断位置を保存して終了するわ。")
+        log_processing_stats("中断")
+        log("中断操作を検知したから、中断位置を保存して終了するわ。")
         return
-
     finally:
         exe.shutdown(wait=False, cancel_futures=True)
     # --- Executor 版ここまで ---
@@ -925,7 +952,9 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         os.remove(resume_path)
         log("[🗑 再開データ削除] 正常終了したから resume.json を削除したわ。")
 
+    PROCESSED_BASE_COUNT = TOTAL_SOURCE_IMAGES
     _clear_progress_line()
+    log_processing_stats("完了")
     log("=== 🎉 完了 ===")
 
     new_moved_count = len(moved) - len(moved_before)  # ★ 今回分だけ

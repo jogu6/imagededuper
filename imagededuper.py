@@ -648,6 +648,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     global W_IMAGES, W_SIZES, W_PATHS, W_PHASHES, W_RESOLUTIONS
     global TOTAL_SOURCE_IMAGES, PROCESSED_BASE_COUNT
 
+    # --- 再開情報の読み込みと初期化 ---
     resume_path = os.path.join(folder_path, RESUME_FILE_NAME)
     resume = load_resume(resume_path)
     is_resume = resume is not None
@@ -668,19 +669,18 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
     moved_before = set(moved)   # ★ 今回実行前の moved を保存
 
-
     log(f"=== 開始: 重複画像チェック {folder_path} ===")
     MOVE_START_TIME = time.time()
     TOTAL_SOURCE_IMAGES = 0
     PROCESSED_BASE_COUNT = 0
 
+    # --- 対象拡張子・出力先ディレクトリ ---
     exts = (".jpg", ".jpeg", ".png", ".bmp", ".gif",
             ".tiff", ".webp", ".jfif", ".heic", ".heif")
-
     dup_dir = os.path.join(folder_path, "duplicates")
     os.makedirs(dup_dir, exist_ok=True)
 
-    # 画像収集（duplicates 以下は除外）
+    # --- 対象画像の収集 ---
     all_files: list[str] = []
     for root, dirs, filenames in os.walk(folder_path):
         dirs[:] = [d for d in dirs if d.lower() != "duplicates"]
@@ -693,39 +693,37 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         log_processing_stats("完了")
         return
 
-    # 収集後すぐ
     log(f"[収集] {len(all_files)} 枚")
 
-    # 予定メモリ消費量の表示（画像キャッシュ用）
     estimated_mem_mb = len(all_files) * 0.05  # 約 50KB/枚（224x224 グレースケールキャッシュ）
     log(f"[予定メモリ消費] 約 {estimated_mem_mb:.2f} MB（224x224 グレースケールキャッシュ）")
 
-    # 前処理：HEIC → JPG
+    # --- 前処理: HEIC/HEIF → JPG ---
     after = []
     for f in all_files:
         if f.lower().endswith((".heic", ".heif")):
             new = safe(convert_heic_to_jpg, f, dup_dir, desc="HEIC変換", retries=2)
             if new:
                 after.append(new)
-        else:
-            after.append(f)
+            continue
+        after.append(f)
 
-    # 前処理：JFIF → JPG
+    # --- 前処理: JFIF → JPG ---
     tmp = []
     for f in after:
         if f.lower().endswith(".jfif"):
             new = safe(rename_jfif_to_jpg, f, desc="JFIF→JPG", retries=2)
             tmp.append(new if new else f)
-        else:
-            tmp.append(f)
+            continue
+        tmp.append(f)
 
-    # 前処理：拡張子修正
+    # --- 前処理: 拡張子の自動修正 ---
     final = []
     for f in tmp:
         fixed = safe(fix_wrong_extension, f, desc="拡張子修正", retries=2)
         final.append(fixed if fixed else f)
 
-    # キャッシュ
+    # --- キャッシュ化 ---
     cached = cache_all_images(final)
     if cached is None:
         log("読み込みが中断されたから、比較処理には進まずに終了するわ。")
@@ -737,9 +735,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     TOTAL_SOURCE_IMAGES = n
     PROCESSED_BASE_COUNT = 0
 
-    # ============================================
-    # ★ 追加1：pHash順ソートで比較順最適化
-    # ============================================
+    # --- pHash順ソートで比較順を最適化 ---
     order = sorted(range(n), key=lambda x: cached_phashes[x])
 
     cached_paths       = [cached_paths[i] for i in order]
@@ -760,9 +756,9 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     log(f"[比較設定] 画像数={n}, 組み合わせ={total_pairs}, workers={workers}")
     log("[🔍 比較] pHash で候補を絞り、その中だけ SSIM で最終判定するわ。")
 
-    # 進捗初期化
+    # --- 進捗初期化 ---
     if not is_resume:
-        CURRENT_PROGRESS = 0  # 初回のみ 0 にする    
+        CURRENT_PROGRESS = 0  # 初回のみ 0 にする
     TOTAL_PROGRESS = total_pairs
     CURRENT_ETA_STR = "計測中"
     PROGRESS_MODE = "compare"
@@ -770,7 +766,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     BASE_START_TIME = time.time()
     print_compare_progress(0, total_pairs)
 
-    # 比較元が変わったときに呼ばれる
+    # --- 比較元が変わったときに呼ばれる処理 ---
     def on_new_base(i: int):
         global BASE_START_DONE, BASE_START_TIME, CURRENT_ETA_STR, PROCESSED_BASE_COUNT
         BASE_START_DONE = CURRENT_PROGRESS
@@ -802,7 +798,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         save_resume(resume_path, i, 0, moved, CURRENT_PROGRESS)
         log(f"[比較] 基準画像 {i+1}/{n}: {os.path.basename(cached_paths[i])}")
 
-    # 比較ペア生成
+    # --- 比較ペア生成 ---
     def pair_gen():
         current_i = None
 
@@ -846,9 +842,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     W_PHASHES      = cached_phashes
     W_RESOLUTIONS  = cached_resolutions
 
-    exe = ThreadPoolExecutor(
-        max_workers=workers
-    )
+    exe = ThreadPoolExecutor(max_workers=workers)
 
     try:
         pending = set()

@@ -63,6 +63,8 @@ CURRENT_ETA_STR = "計測中"
 LOAD_START_TIME = 0.0
 LOAD_LAST_PERCENT = -1
 
+PROGRESS_BAR_WIDTH = 30
+
 PROGRESS_MODE = "none"  # "none" | "load" | "compare"
 LOAD_DONE = 0
 LOAD_TOTAL = 1
@@ -182,7 +184,7 @@ def _clear_progress_line():
     sys.stdout.flush()
 
 
-def print_loading_progress(done: int, total: int, width: int = 40):
+def print_loading_progress(done: int, total: int, width: int = PROGRESS_BAR_WIDTH):
     global PROGRESS_MODE, LOAD_DONE, LOAD_TOTAL, LOAD_LAST_PERCENT, CURRENT_ETA_STR
     PROGRESS_MODE = "load"
     LOAD_DONE = done
@@ -222,7 +224,7 @@ def compute_load_eta(done: int, total: int) -> str:
     return eta.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def print_compare_progress(done: int, total: int, width: int = 40):
+def print_compare_progress(done: int, total: int, width: int = PROGRESS_BAR_WIDTH):
     """比較フェーズ用進捗バー（ETA付き）"""
     global CURRENT_PROGRESS, TOTAL_PROGRESS, PROGRESS_MODE
     CURRENT_PROGRESS = done
@@ -498,6 +500,7 @@ def hamming64(a: int, b: int) -> int:
 
 
 PHASH_THRESHOLD = 40  # これより大きいと SSIM を実行しない
+DEFAULT_SSIM_THRESHOLD = 0.85  # SSIM 判定のデフォルト値
 
 
 # ============================================
@@ -624,7 +627,7 @@ def ssim_task(pair):
 # ============================================
 # メイン処理
 # ============================================
-def move_duplicates(folder_path: str, threshold: float = 0.85):
+def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD):
     global CURRENT_PROGRESS, TOTAL_PROGRESS, CURRENT_ETA_STR
     global PROGRESS_MODE, BASE_START_DONE, BASE_START_TIME, MOVE_START_TIME
     global W_IMAGES, W_SIZES, W_PATHS, W_PHASHES, W_RESOLUTIONS
@@ -973,10 +976,12 @@ if __name__ == "__main__":
             sys.exit(1)
     # --- 追加ここまで ---
 
+    threshold_value = DEFAULT_SSIM_THRESHOLD
+    log(f"[設定] SSIM 閾値: {threshold_value:.2f} (変更したい場合は DEFAULT_SSIM_THRESHOLD を編集してね)")
     safe(
         move_duplicates,
         folder,
-        threshold=0.85,
+        threshold=threshold_value,
         desc="重複削除処理",
         retries=2,
     )

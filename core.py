@@ -362,7 +362,7 @@ def safe(func, *args, desc="処理", retries=0, **kwargs):
 
         except Exception as exc:
             is_final = attempt >= retries
-            msg = f"⚠ {desc} 失敗 (試行 {attempt+1}/{retries+1})"
+            msg = f"⚠️ {desc} 失敗 (試行 {attempt+1}/{retries+1})"
             log(msg if not is_final else f"{msg} [traceback]")
             if is_final:
                 _write_traceback_log(desc, exc)
@@ -590,7 +590,7 @@ def cache_all_images(paths: list[str]):
                 g = img.convert("L")
                 arr = np.array(g.resize((224, 224)))
         except Exception as exc:
-            log(f"[⚠ 読込失敗] {path}: {exc}")
+            log(f"[⚠️ 読込失敗] {path}: {exc}")
             continue
 
         imgs.append(arr)
@@ -601,7 +601,7 @@ def cache_all_images(paths: list[str]):
         try:
             hashes.append(compute_file_sha1(path))
         except Exception as exc:
-            log(f"[⚠ SHA-1計算失敗] {path}: {exc}")
+            log(f"[⚠️ SHA-1計算失敗] {path}: {exc}")
             hashes.append("")
 
     _clear_progress_line()

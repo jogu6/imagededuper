@@ -24,7 +24,7 @@ def handle_resume_choice(resume_path: str) -> bool:
     if not os.path.exists(resume_path):
         return True
 
-        print("\n=== 中断データが見つかりました ===")
+    print("\n=== 中断データが見つかりました ===")
     print("  [1] 続きから再開")
     print("  [2] 最初からやり直す")
     print("  [3] キャンセルして終了")

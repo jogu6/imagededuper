@@ -804,7 +804,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
     cached = cache_all_images(final)
     if cached is None:
-        log("読み込みが中断されたから、比較処理には進まずに終了する。")
+        log("読み込みが中断されたため、比較処理には進まず終了する。")
         log_processing_stats("中断")
         return
 
@@ -976,7 +976,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         ni, nj = compute_next_pair(last_i, last_j, n)
         save_resume(resume_path, ni, nj, moved, current_progress)
         log_processing_stats("中断")
-        log("中断操作を検知したから、中断位置を保存して終了する。")
+        log("中断操作を検知したため、中断位置を保存して終了する。")
         return
 
     finally:

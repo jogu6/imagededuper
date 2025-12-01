@@ -56,7 +56,7 @@ def main():
     戻り値: なし。"""
     install_silent_keyboardinterrupt_hook()
 
-    folder = input("対象フォルダを入力してね: ").strip().strip('"')
+    folder = input("対象フォルダを入力してください: ").strip().strip('"')
     if not os.path.isdir(folder):
         log(f"[エラー] フォルダが存在しないわ: {folder}")
         sys.exit(1)
@@ -65,7 +65,7 @@ def main():
     if not handle_resume_choice(resume_path):
         sys.exit(1)
 
-    log(f"[設定] SSIM 閾値: {DEFAULT_SSIM_THRESHOLD:.2f} (変更したい場合は config.py を編集してね)")
+    log(f"[設定] SSIM 閾値: {DEFAULT_SSIM_THRESHOLD:.2f} (変更したい場合は config.py を編集してください)")
     safe(
         move_duplicates,
         folder,

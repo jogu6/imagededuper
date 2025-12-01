@@ -1,3 +1,5 @@
+"""アプリ全体で共有する設定値やパス定義。"""
+
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent

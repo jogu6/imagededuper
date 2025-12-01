@@ -1,3 +1,5 @@
+"""重複検出ロジック全体（ログ・進捗・比較・前処理）をまとめたモジュール。"""
+
 import hashlib
 import json
 import os
@@ -56,6 +58,7 @@ W_HASHES = None
 
 
 def _format_timestamp_with_delta():
+    """ログラベル用のタイムスタンプ（直近出力との差分付き）を生成する。"""
     global _last_log_time
     now = datetime.now()
     ts = now.strftime("%Y%m%d %H%M%S")
@@ -75,6 +78,7 @@ def _format_timestamp_with_delta():
 
 
 def _base_log(msg: str):
+    """進捗バーを気にせずに素のログを出力し、ファイルにも書き込む。"""
     global _last_log_line
     log_name = f"imagededuper_{datetime.now().strftime('%Y%m')}.log"
     logfile = os.path.join(LOG_DIR, log_name)
@@ -97,6 +101,7 @@ def _base_log(msg: str):
 
 
 def _write_traceback_log(desc: str, exc: Exception):
+    """例外発生時の詳細トレースバックを専用ファイルへ追記する。"""
     today = datetime.now().strftime("%Y%m%d")
     tb_file = os.path.join(LOG_DIR, f"error_traceback_{today}.log")
     ts = _format_timestamp_with_delta()
@@ -116,12 +121,14 @@ def _write_traceback_log(desc: str, exc: Exception):
 
 
 def log(msg: str):
+    """進捗バーを一時的に隠してからログ出力し、終わったら進捗を再描画する。"""
     _clear_progress_line()
     _base_log(msg)
     redraw_progress()
 
 
 def log_processing_stats(label: str):
+    """経過時間と処理済み基準画像数をまとめてログに出す。"""
     elapsed = time.time() - MOVE_START_TIME if MOVE_START_TIME else 0.0
     h = int(elapsed // 3600)
     m = int((elapsed % 3600) // 60)
@@ -133,6 +140,7 @@ def log_processing_stats(label: str):
 
 
 def save_resume(resume_path: str, i: int, j: int, moved: set[str], progress: int):
+    """再開に必要な情報を JSON 形式で保存する。"""
     data = {
         "i": i,
         "j": j,
@@ -144,6 +152,7 @@ def save_resume(resume_path: str, i: int, j: int, moved: set[str], progress: int
 
 
 def load_resume(resume_path: str):
+    """保存済みの再開データを読み取って返す。"""
     if not os.path.exists(resume_path):
         return None
     with open(resume_path, "r", encoding="utf-8") as f:
@@ -151,12 +160,14 @@ def load_resume(resume_path: str):
 
 
 def _clear_progress_line():
+    """進捗バー用の行を消去し、カーソルを先頭へ戻す。"""
     sys.stdout.write("\r")
     sys.stdout.write("\033[K")
     sys.stdout.flush()
 
 
 def print_loading_progress(done: int, total: int):
+    """読み込みフェーズの進捗バーを描画する。"""
     global PROGRESS_MODE, LOAD_DONE, LOAD_TOTAL, CURRENT_ETA_STR, LOAD_LAST_PERCENT
     PROGRESS_MODE = "load"
     LOAD_DONE = done
@@ -182,6 +193,7 @@ def print_loading_progress(done: int, total: int):
 
 
 def compute_load_eta(done: int, total: int) -> str:
+    """現在の読み込み枚数から終了予定時刻を推定する。"""
     if done == 0:
         return "計測中"
 
@@ -193,6 +205,7 @@ def compute_load_eta(done: int, total: int) -> str:
 
 
 def print_compare_progress(done: int, total: int):
+    """比較フェーズの進捗バーを描画する。"""
     global CURRENT_PROGRESS, TOTAL_PROGRESS, PROGRESS_MODE
     CURRENT_PROGRESS = done
     TOTAL_PROGRESS = total
@@ -211,6 +224,7 @@ def print_compare_progress(done: int, total: int):
 
 
 def redraw_progress():
+    """直前のログ出力で消えた進捗表示を復元する。"""
     if PROGRESS_MODE == "load":
         print_loading_progress(LOAD_DONE, LOAD_TOTAL)
     elif PROGRESS_MODE == "compare":
@@ -218,36 +232,43 @@ def redraw_progress():
 
 
 def update_move_start_time():
+    """比較処理の開始時刻を記録し直す。"""
     global MOVE_START_TIME
     MOVE_START_TIME = time.time()
 
 
 def set_total_source_images(count: int):
+    """総画像枚数カウンタを更新する。"""
     global TOTAL_SOURCE_IMAGES
     TOTAL_SOURCE_IMAGES = count
 
 
 def set_processed_base_count(count: int):
+    """現在までに扱った基準画像数を記録する。"""
     global PROCESSED_BASE_COUNT
     PROCESSED_BASE_COUNT = count
 
 
 def increment_progress(delta: int = 1):
+    """比較済みペア数を加算する。"""
     global CURRENT_PROGRESS
     CURRENT_PROGRESS += delta
 
 
 def set_progress(value: int):
+    """比較済みペア数を直接設定する。"""
     global CURRENT_PROGRESS
     CURRENT_PROGRESS = value
 
 
 def _backoff(attempt: int):
+    """指数バックオフでリトライ前の待機時間を調整する。"""
     delay = min(30, (2**attempt) + random.uniform(0, 1))
     time.sleep(delay)
 
 
 def install_silent_keyboardinterrupt_hook():
+    """KeyboardInterrupt のときだけトレースバックを抑制する excepthook を仕込む。"""
     old_hook = sys.excepthook
 
     def _hook(exc_type, exc, tb):
@@ -259,6 +280,7 @@ def install_silent_keyboardinterrupt_hook():
 
 
 def safe(func, *args, desc="処理", retries=0, **kwargs):
+    """例外に強いリトライ付きラッパーで任意の関数を実行する。"""
     for attempt in range(retries + 1):
         try:
             return func(*args, **kwargs)
@@ -278,10 +300,12 @@ def safe(func, *args, desc="処理", retries=0, **kwargs):
 
 
 def quit_requested():
+    """コンソールで q/Q が押されていないかを調べる。"""
     return msvcrt.kbhit() and msvcrt.getch() in (b"q", b"Q")
 
 
 def compute_file_sha1(path: str, chunk: int = 1024 * 1024) -> str:
+    """ファイルの SHA-1 ハッシュ値を計算する。"""
     h = hashlib.sha1()
     with open(path, "rb") as f:
         while True:
@@ -293,6 +317,7 @@ def compute_file_sha1(path: str, chunk: int = 1024 * 1024) -> str:
 
 
 def safe_rename_with_hash(src: str, dst: str, desc: str) -> bool:
+    """rename に失敗した場合でも SHA-1 照合で安全に統一する。"""
     def _try(a, b):
         os.rename(a, b)
         return True
@@ -342,6 +367,7 @@ def safe_rename_with_hash(src: str, dst: str, desc: str) -> bool:
 
 
 def convert_heic_to_jpg(path: str, dup_dir: str) -> str | None:
+    """HEIC/HEIF を JPEG に変換し、元ファイルを duplicates へ退避する。"""
     try:
         with Image.open(path) as img:
             new_path = os.path.splitext(path)[0] + ".jpg"
@@ -356,6 +382,7 @@ def convert_heic_to_jpg(path: str, dup_dir: str) -> str | None:
 
 
 def rename_jfif_to_jpg(path: str) -> str:
+    """拡張子 .jfif を .jpg に変更する。"""
     try:
         new_path = os.path.splitext(path)[0] + ".jpg"
         os.rename(path, new_path)
@@ -367,6 +394,7 @@ def rename_jfif_to_jpg(path: str) -> str:
 
 
 def fix_wrong_extension(path: str) -> str:
+    """実際の画像フォーマットに合わせて拡張子を補正する。"""
     try:
         with Image.open(path) as img:
             fmt = (img.format or "").upper()
@@ -396,10 +424,12 @@ def fix_wrong_extension(path: str) -> str:
 
 
 def dct2(a: np.ndarray) -> np.ndarray:
+    """2 次元 DCT を計算するヘルパー。"""
     return dct_1d(dct_1d(a, axis=0, norm="ortho"), axis=1, norm="ortho")
 
 
 def calc_phash(img_arr: np.ndarray) -> int:
+    """224x224 グレースケール画像から 64bit の pHash を計算する。"""
     img = Image.fromarray(img_arr).resize((32, 32), Image.LANCZOS)
     mat = np.asarray(img, dtype=np.float32)
     d = dct2(mat)
@@ -413,10 +443,12 @@ def calc_phash(img_arr: np.ndarray) -> int:
 
 
 def hamming64(a: int, b: int) -> int:
+    """64bit 整数同士のハミング距離を求める。"""
     return (a ^ b).bit_count()
 
 
 def cache_all_images(paths: list[str]):
+    """対象ファイルを読み込み、SSIM 用のキャッシュ一式を作って返す。"""
     global LOAD_START_TIME, LOAD_LAST_PERCENT, CURRENT_ETA_STR
     LOAD_START_TIME = time.time()
     LOAD_LAST_PERCENT = -1
@@ -467,6 +499,7 @@ def cache_all_images(paths: list[str]):
 
 
 def get_optimal_workers():
+    """CPU コア数からスレッドプールの適切な worker 数を推定する。"""
     phys = psutil.cpu_count(logical=False)
     logi = psutil.cpu_count(logical=True)
 
@@ -479,6 +512,7 @@ hamming_cache = {}
 
 
 def fast_hamming(a, b):
+    """pHash のハミング距離をキャッシュ付きで高速に求める。"""
     key = (a << 64) | b
     if key in hamming_cache:
         return hamming_cache[key]
@@ -488,6 +522,7 @@ def fast_hamming(a, b):
 
 
 def set_worker_data(images, sizes, paths, phashes, resolutions, hashes):
+    """比較ワーカーが参照するグローバルデータを設定する。"""
     global W_IMAGES, W_SIZES, W_PATHS, W_PHASHES, W_RESOLUTIONS, W_HASHES
     W_IMAGES = images
     W_SIZES = sizes
@@ -498,10 +533,12 @@ def set_worker_data(images, sizes, paths, phashes, resolutions, hashes):
 
 
 def clear_worker_data():
+    """比較ワーカー用のグローバルデータをクリアする。"""
     set_worker_data(None, None, None, None, None, None)
 
 
 def ssim_task(pair):
+    """1 ペアの SHA-1 / pHash / SSIM 判定を行い、結果を返す。"""
     try:
         i, j = pair
         sha_match = False
@@ -543,6 +580,7 @@ def ssim_task(pair):
 
 
 def compute_next_pair(i: int, j: int, n: int) -> tuple[int, int]:
+    """現在の (i, j) に続く比較ペアを計算する。"""
     j = j + 1
     if j <= i:
         j = i + 1
@@ -557,6 +595,7 @@ def compute_next_pair(i: int, j: int, n: int) -> tuple[int, int]:
 
 
 def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD):
+    """指定フォルダ内の重複画像を検出し、duplicates へ移動するメイン処理。"""
     resume_path = os.path.join(folder_path, RESUME_FILE_NAME)
     resume = load_resume(resume_path)
     is_resume = resume is not None

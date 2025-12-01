@@ -27,3 +27,6 @@ YahooNewsViewer_backup_*.zip
 .DS_Store
 Thumbs.db
 .vscode/
+docs/_site/
+docs/.sass-cache/
+docs/.jekyll-cache/

@@ -1,3 +1,9 @@
+---
+layout: page
+title: imagededuper
+permalink: /
+---
+
 # imagededuper
 
 - 日本語でのご案内のあとに英語版を続けています。  

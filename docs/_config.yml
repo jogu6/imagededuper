@@ -1,0 +1,21 @@
+title: imagededuper
+description: >-
+  Duplicate image cleanup tool documentation and release notes.
+lang: ja
+url: "https://your-github-username.github.io" # TODO: replace with actual GitHub Pages hostname
+baseurl: "/imagededuper"
+theme: minima
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+markdown: kramdown
+kramdown:
+  input: GFM
+  hard_wrap: false
+  syntax_highlighter_opts:
+    block:
+      line_numbers: false
+exclude:
+  - README.md
+  - Gemfile.lock
+  - vendor

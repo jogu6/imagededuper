@@ -957,7 +957,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
                     dst = os.path.join(dup_dir, os.path.basename(smaller))
                     moved.add(smaller)
                     if sha_match:
-                        log(f"[♻ SHA-1一致] {smaller} を移動します。")
+                        log(f"[♻️ SHA-1一致] {smaller} を移動します。")
                     else:
                         log(f"[🧩 重複検出] SSIM={score:.4f} → {smaller} を移動")
                     safe(shutil.move, smaller, dst, desc="重複移動", retries=2)

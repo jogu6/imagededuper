@@ -31,10 +31,10 @@ def handle_resume_choice(resume_path: str) -> bool:
     choice = input("番号を選んでね: ").strip()
 
     if choice == "1":
-        log("[選択] 続きから再開する。")
+        log("[選択] 続きから再開します。")
         return True
     if choice == "2":
-        log("[選択] 最初から再処理する。")
+        log("[選択] 最初から再処理します。")
         try:
             os.remove(resume_path)
             log("[再開データ削除] 古い再開情報を削除したわ。")
@@ -43,10 +43,10 @@ def handle_resume_choice(resume_path: str) -> bool:
             return False
         return True
     if choice == "3":
-        log("[選択] キャンセルする。")
+        log("[選択] キャンセルします。")
         return False
 
-    log("[エラー] 無効な番号。処理を停止する。")
+    log("[エラー] 無効な番号です。処理を停止します。")
     return False
 
 

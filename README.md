@@ -2,6 +2,7 @@
 
 - 日本語でのご案内のあとに英語版を続けています。  
 - Japanese description is followed by an English translation.
+- GitHub Pages 版（ドキュメントサイト）: https://jogu6.github.io/imagededuper/
 
 ---
 

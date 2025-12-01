@@ -1,65 +1,119 @@
 # imagededuper
 
-Python 製の重複画像検出ツールです。フォルダを再帰的に走査し、拡張子統一 → SHA-1 → pHash → SSIM を段階的に適用して重複判定を行い、解像度の低い画像を `duplicates/` フォルダへ自動的に移動します。読み込み・比較の各フェーズでは進捗バーと ETA を表示し、中断操作を検知すると再開用データを保存します。
+- 日本語でのご案内のあとに英語版を続けています。  
+- Japanese description is followed by an English translation.
 
-## 主な特徴
+---
 
-- HEIC/HEIF から JPEG への変換、および JFIF/誤った拡張子の補正を自動化
-- SHA-1 の完全一致、pHash による候補絞り込み、SSIM による最終判定で精度と速度を両立
-- 解像度の低い画像だけを `duplicates/` へ移動し、ログへ詳細を記録
-- 読み込み・比較の両フェーズで進捗バーと ETA を表示
-- 処理中断時に `resume.json` を生成し、次回起動時に再開／リセットを選択可能
-- `config.py` で SSIM 閾値や進捗バー幅などの設定を一括管理
+## 概要 / Overview
 
-## 必要要件
+**日本語**: imagededuper は、フォルダ配下の画像を再帰的に走査し、拡張子の統一や HEIC/JFIF 変換を経て、SHA-1 → pHash → SSIM の三段階で重複検出を行う Python 製ツールです。重複と判定した画像は、解像度の低い方を `duplicates/` ディレクトリへ自動的に移動します。
 
-- Python 3.10 以上を推奨
-- 主要依存パッケージ  
+**English**: imagededuper is a Python tool that recursively scans image folders, normalizes extensions (including HEIC/JFIF conversion), and detects duplicates via a three-step process: SHA-1 hashing, perceptual hashing (pHash), and SSIM. Lower-resolution duplicates are automatically moved to the `duplicates/` directory.
+
+---
+
+## 特徴 / Features
+
+1. **拡張子・フォーマットの自動補正 / Automatic format normalization**  
+   日本語: HEIC/HEIF → JPEG 変換、JFIF→JPG 変換、拡張子誤りの修正を自動で実行します。  
+   English: Automatically converts HEIC/HEIF to JPEG, renames JFIF to JPG, and fixes mismatched extensions.
+
+2. **段階的な判定フロー / Layered duplicate detection**  
+   日本語: SHA-1 で完全一致を除去し、pHash で候補を絞り、SSIM で最終判定することで速度と精度を両立しています。  
+   English: Combines SHA-1 (exact matches), pHash (candidate filtering), and SSIM (final decision) for a balance of speed and accuracy.
+
+3. **重複画像の自動整理 / Automatic duplicate relocation**  
+   日本語: 解像度の低い方の画像のみ `duplicates/` へ移動し、ログへ記録します。  
+   English: Moves only the lower-resolution file to `duplicates/` and logs the action.
+
+4. **進捗表示と中断再開 / Progress bars & resumable runs**  
+   日本語: 読み込み・比較フェーズそれぞれで進捗バーと ETA を表示し、`q` で中断すると再開用 `resume.json` を保存します。  
+   English: Displays progress bars with ETA for both loading and comparison phases; pressing `q` saves `resume.json` for resuming later.
+
+5. **設定の一元管理 / Centralized configuration**  
+   日本語: `config.py` で SSIM 閾値や進捗バー幅などをまとめて調整できます。  
+   English: All tunable settings (SSIM threshold, progress bar width, etc.) live in `config.py`.
+
+---
+
+## 必要要件 / Requirements
+
+- Python 3.10+ を推奨 / Python 3.10+ recommended  
+- 主要依存ライブラリ / Key dependencies:  
   `numpy`, `Pillow`, `pillow-heif`, `scikit-image`, `scipy`, `psutil`
 
-※ 仮想環境での利用を推奨します。既存環境にインストール済みであれば追加作業は不要です。
+---
 
-## セットアップ
+## セットアップ / Setup
 
 ```bash
 python -m venv .venv
-. .venv/Scripts/activate  # Windows PowerShell の例
-pip install -r requirements.txt  # まだ無い場合は poetry/pip などで各パッケージを導入
+. .venv/Scripts/activate   # Windows PowerShell 例 / example
+pip install -r requirements.txt
+# または individually / or install individually:
+# pip install numpy Pillow pillow-heif scikit-image scipy psutil
 ```
 
-`requirements.txt` が無い場合は `pip install numpy Pillow pillow-heif scikit-image scipy psutil` のように個別に導入してください。
+---
 
-## 使い方
+## 使い方 / Usage
 
 ```bash
 python imagededuper.py
 ```
 
-1. 実行すると対象フォルダを尋ねられるので、重複検出したいフォルダパスを入力します。
-2. `duplicates/` フォルダ（存在しない場合は自動作成）に重複と判断された画像が移動され、詳細は `log/imagededuper_YYYYMM.log` に記録されます。
-3. 処理途中に `q` を押すと中断し、次回起動時に「続きから再開／最初からやり直す／キャンセル」を選択できます。
+1. **フォルダ入力 / Enter target folder**  
+   実行すると対象フォルダを尋ねられます。 / You will be prompted for a folder path.
 
-### 設定の変更
+2. **処理と出力 / Processing & output**  
+   `duplicates/` に重複が移動され、`log/imagededuper_YYYYMM.log` に詳細が追記されます。  
+   Duplicates are moved to `duplicates/`, and logs are appended under `log/`.
 
-`config.py` に以下のような設定値があります。編集後は再実行するだけで反映されます。
+3. **中断と再開 / Interruption & resume**  
+   途中で `q` を押すと中断し、次回起動時に「再開／やり直し／キャンセル」を選べます。  
+   Press `q` to interrupt; next run will offer resume/reset/cancel options.
 
-| 変数名 | 説明 |
-| --- | --- |
-| `DEFAULT_SSIM_THRESHOLD` | SSIM がこの値以上のとき重複とみなす（既定 0.85） |
-| `PHASH_THRESHOLD` | pHash の距離がこの値以下なら SSIM を計算（既定 40） |
-| `DEBUG_LOG_SSIM` | `True` にすると SSIM 計算の詳細ログを出力 |
-| `PROGRESS_BAR_WIDTH` | 進捗バーの幅（文字数） |
-| `RESUME_FILE_NAME` | 中断情報ファイル名（既定 `resume.json`） |
+---
 
-## ログと再開データ
+## 設定変更 / Configuration
 
-- ログ: `log/` フォルダに `imagededuper_YYYYMM.log` 形式で追記され、重大なエラーは `error_traceback_YYYYMMDD.log` に記録されます。
-- 再開データ: `resume.json` が存在する場合、起動時に再開／リセット／キャンセルを選択できます。完了後は自動的に削除されます。
+`config.py` で以下を調整できます / You can edit the following in `config.py`:
 
-## サポートとご留意点
+| 変数 / Variable | 説明 (日本語) | Description (English) |
+| --- | --- | --- |
+| `DEFAULT_SSIM_THRESHOLD` | SSIM がこの値以上で重複判定（既定 0.85） | SSIM threshold for duplicates (default 0.85) |
+| `PHASH_THRESHOLD` | pHash の距離がこの値以下なら SSIM を計算 | pHash Hamming distance threshold to run SSIM |
+| `DEBUG_LOG_SSIM` | True で SSIM の詳細ログを出力 | Enable verbose SSIM logs |
+| `PROGRESS_BAR_WIDTH` | 進捗バーの幅（文字数） | Width of progress bars |
+| `RESUME_FILE_NAME` | 中断情報ファイル名 | Filename used for resume data |
 
-個人の趣味開発プロジェクトのため、Issues への対応は可能な範囲になります。また、このリポジトリは日本語をベースに運用しているため、英語での質問には翻訳を介して対応する点をご理解ください。
+---
 
-## ライセンス
+## ログと再開データ / Logs & Resume Data
 
-詳細は `LICENSE.md` を参照してください（MIT License）。
+- **ログ / Logs**: `log/imagededuper_YYYYMM.log` に通常ログ、`log/error_traceback_YYYYMMDD.log` に例外トレースを記録します。  
+  Normal logs go to `log/imagededuper_YYYYMM.log`; tracebacks to `log/error_traceback_YYYYMMDD.log`.
+- **再開データ / Resume data**: `resume.json` が存在すると起動時に再開／リセット／キャンセルを選択できます。完了後は自動削除されます。  
+  If `resume.json` exists, the tool prompts you to resume, restart, or cancel on launch; the file is deleted after a successful run.
+
+---
+
+## サポートと言語について / Support & Language
+
+日本語:
+- 個人の趣味開発のため、Issues 等への対応は可能な範囲で行います。
+- このリポジトリは日本語をベースに運用しているため、英語での質問には翻訳を介して対応します。
+
+English:
+- This is a hobby project; support (Issues/PRs) will be handled on a best-effort basis.
+- The repository is maintained primarily in Japanese, so English inquiries will be answered through translation tools.
+
+---
+
+## ライセンス / License
+
+- 本ソフトウェアは MIT License で配布しています。詳細は `LICENSE.md` を参照してください。  
+- Third-party dependencies and their licenses are summarized in `THIRD_PARTY_LICENSES.md`.
+
+This project is distributed under the MIT License (see `LICENSE.md`). Dependencies are listed in `THIRD_PARTY_LICENSES.md`.

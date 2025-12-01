@@ -6,8 +6,9 @@ permalink: /
 
 # imagededuper
 
-- 日本語でのご案内のあとに英語版を続けています。  
+- 日本語でのご案内のあとに英語版を続けています。 
 - Japanese description is followed by an English translation.
+- GitHub リポジトリ: https://github.com/jogu6/imagededuper
 
 ---
 

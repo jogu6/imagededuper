@@ -63,6 +63,29 @@ pip install -r requirements.txt
 # pip install numpy Pillow pillow-heif scikit-image scipy psutil
 ```
 
+## 導入手順 / Installation Walkthrough
+
+1. **Python のインストール / Install Python**  
+   日本語: [python.org](https://www.python.org/downloads/windows/) から Python 3.10 以上 (推奨 x64) を入れ、インストーラーで「Add python.exe to PATH」にチェックを入れてください。  
+   English: Download Python 3.10+ (x64) from [python.org](https://www.python.org/downloads/windows/) and ensure “Add python.exe to PATH” is selected during installation.
+
+2. **GitHub から ZIP を取得 / Download ZIP from GitHub**  
+   日本語: リポジトリページ右上の `Code` → `Download ZIP` をクリックし、保存した ZIP を展開します。  
+   English: On the repository page click `Code` → `Download ZIP`, then extract the archive to a folder of your choice.
+
+3. **README のセットアップ手順を実行 / Run README setup steps**  
+   日本語: PowerShell などで展開フォルダへ移動し、README にあるセットアップコマンドを順番に実行します。  
+   English: Open PowerShell (or your shell), change into the extracted folder, and run the setup commands from the README.  
+   ```powershell
+   cd C:\path\to\imagededuper
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1   # Git Bash なら source .venv/bin/activate
+   pip install -r requirements.txt
+   python imagededuper.py
+   ```
+   日本語: 以上で `imagededuper.py` が起動し、README に説明のあるフォルダ指定や重複処理を行えます。  
+   English: After these steps `imagededuper.py` will start and prompt for the target folder as described in the README.
+
 ---
 
 ## 使い方 / Usage

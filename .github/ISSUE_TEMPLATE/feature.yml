@@ -1,0 +1,10 @@
+name: "改善案"
+description: "改善したい機能や新たに追加したい機能"
+title: "[改善案] "
+labels: ["feature"]
+body:
+  - type: textarea
+    id: details
+    attributes:
+      label: "改善内容"
+      description: "改善したい内容の詳細を書いてください。"

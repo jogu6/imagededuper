@@ -1,0 +1,10 @@
+name: "ドキュメント"
+description: "仕様・スクリプト説明・設計メモなど"
+title: "[ドキュメント] "
+labels: ["documentation"]
+body:
+  - type: textarea
+    id: details
+    attributes:
+      label: "説明内容"
+      description: "どのファイルや処理について書くか記載してください。"

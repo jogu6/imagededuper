@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+
+# venv
+venv/
+venv_backup/
+
+# local data / cache / logs
+cache/
+log/
+*.log
+*.db
+*.sqlite
+*.zip
+chat_package*.md
+
+# app specific
+backup/
+rss_data_from_db/
+task_scheduler_setting/
+lock/
+YahooNewsViewer_backup_*.zip
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/

@@ -1,0 +1,21 @@
+name: "バグ報告"
+description: "エラーや不具合があった場合はこちら"
+title: "[バグ] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: "再現手順"
+      description: "どのような操作で発生したかを書いてください。"
+  - type: textarea
+    id: expected
+    attributes:
+      label: "期待される動作"
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: "環境"
+      description: "OS / Python / ライブラリ バージョンなど"

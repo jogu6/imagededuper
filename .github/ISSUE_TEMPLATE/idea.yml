@@ -1,0 +1,14 @@
+name: "アイデア"
+description: "思いついたことや将来試したい案を書き留める"
+title: "[アイデア] "
+labels: ["idea"]
+body:
+  - type: textarea
+    id: concept
+    attributes:
+      label: "アイデアの概要"
+  - type: textarea
+    id: notes
+    attributes:
+      label: "メモ"
+      description: "関連するメモや気づいた点があれば書いてください。"

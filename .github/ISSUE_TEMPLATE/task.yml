@@ -1,0 +1,10 @@
+name: "タスク"
+description: "やるべき作業を整理するためのIssue"
+title: "[タスク] "
+labels: ["task"]
+body:
+  - type: textarea
+    id: details
+    attributes:
+      label: "内容"
+      description: "取り組む作業内容を記述してください。"

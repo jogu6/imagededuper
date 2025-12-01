@@ -1,0 +1,17 @@
+name: "研究メモ"
+description: "調査・検証・技術研究の記録用"
+title: "[研究] "
+labels: ["research"]
+body:
+  - type: textarea
+    id: topic
+    attributes:
+      label: "研究テーマ"
+  - type: textarea
+    id: findings
+    attributes:
+      label: "調査結果・気づき"
+  - type: textarea
+    id: next
+    attributes:
+      label: "次に試すこと"

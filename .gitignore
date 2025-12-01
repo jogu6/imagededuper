@@ -16,6 +16,7 @@ log/
 chat_package*.md
 
 # app specific
+devtools/
 backup/
 rss_data_from_db/
 task_scheduler_setting/

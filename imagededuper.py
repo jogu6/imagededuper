@@ -614,7 +614,7 @@ def cache_all_images(paths: list[str]):
     """用途: 画像一覧を読み込み、SSIM/ pHash 計算に必要な情報をキャッシュする。
     引数:
         paths: 読み込み対象のファイルパス一覧。
-    戻り値: (paths, 224x224配列, ファイルサイズ, pHash, 解像度) のタプル。失敗時は None。"""
+    戻り値: (paths, 224x224配列, ファイルサイズ, pHash, 解像度, SHA-1) のタプル。失敗時は None。"""
     global LOAD_START_TIME, LOAD_LAST_PERCENT
     LOAD_START_TIME = time.time()
     LOAD_LAST_PERCENT = -1
@@ -624,6 +624,7 @@ def cache_all_images(paths: list[str]):
     phashes = []
     valid_paths = []
     resolutions = []   # ★ 追加：ここで必ず初期化
+    hashes = []
 
     total = len(paths)
     log(f"[📥 読込開始] {total} 枚")
@@ -654,10 +655,15 @@ def cache_all_images(paths: list[str]):
         resolutions.append((width, height))   # ★ 解像度保存
         phashes.append(calc_phash(arr))
         valid_paths.append(p)
+        try:
+            hashes.append(compute_file_sha1(p))
+        except Exception as e:
+            log(f"[⚠ SHA-1計算失敗] {p}: {e}")
+            hashes.append("")
 
     _clear_progress_line()
     log(f"[✅ 読込完了] 有効画像数: {len(valid_paths)}")
-    return valid_paths, imgs, sizes, phashes, resolutions
+    return valid_paths, imgs, sizes, phashes, resolutions, hashes
 
 
 # ============================================
@@ -668,6 +674,7 @@ W_SIZES = None
 W_PATHS = None
 W_PHASHES = None
 W_RESOLUTIONS = None  # ★ 追加
+W_HASHES = None
 
 def compute_next_pair(i: int, j: int, n: int) -> tuple[int, int]:
     """用途: 現在の (i, j) に続く比較ペアを求める。
@@ -709,29 +716,38 @@ def fast_hamming(a, b):
 # SSIMタスク
 # ============================================
 def ssim_task(pair):
-    """用途: 1 ペア分の SSIM を計算し、重複候補情報を返す。
-    引数:
-        pair: (i, j) のタプル。
-    戻り値: 情報タプルまたは None（pHash で除外・エラー時）。"""
+    """??: 1 ???? SSIM ???????????????
+    ??:
+        pair: (i, j) ?????
+    ???: ???????? None?pHash ??????????"""
     try:
         i, j = pair
-        # pHash スキップ
-        if fast_hamming(W_PHASHES[i], W_PHASHES[j]) > PHASH_THRESHOLD:
-            return None
+        sha_match = False
 
-        img1 = W_IMAGES[i]
-        img2 = W_IMAGES[j]
-        score = float(ssim(img1, img2, full=False))
+        if W_HASHES[i] and W_HASHES[i] == W_HASHES[j]:
+            sha_match = True
+        else:
+            # pHash ????
+            if fast_hamming(W_PHASHES[i], W_PHASHES[j]) > PHASH_THRESHOLD:
+                return None
 
-        if DEBUG_LOG_SSIM:
-            log(f"[DEBUG SSIM] {W_PATHS[i]} vs {W_PATHS[j]} → SSIM={score:.4f}")
+        if sha_match:
+            score = 1.0
+        else:
+            img1 = W_IMAGES[i]
+            img2 = W_IMAGES[j]
+            score = float(ssim(img1, img2, full=False))
+
+            if DEBUG_LOG_SSIM:
+                log(f"[DEBUG SSIM] {W_PATHS[i]} vs {W_PATHS[j]} -> SSIM={score:.4f}")
 
         return (
             i, j,
             W_PATHS[i], W_PATHS[j],
             score,
             W_SIZES[i], W_SIZES[j],
-            W_RESOLUTIONS[i], W_RESOLUTIONS[j]   # ★追加
+            W_RESOLUTIONS[i], W_RESOLUTIONS[j],  # ? ??
+            sha_match
         )
 
     except KeyboardInterrupt:
@@ -739,6 +755,7 @@ def ssim_task(pair):
 
     except Exception:
         return None
+
 
 # ============================================
 # メイン処理
@@ -750,7 +767,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         threshold: SSIM 判定に用いる閾値。"""
     global CURRENT_PROGRESS, TOTAL_PROGRESS, CURRENT_ETA_STR
     global PROGRESS_MODE, BASE_START_DONE, BASE_START_TIME, MOVE_START_TIME
-    global W_IMAGES, W_SIZES, W_PATHS, W_PHASHES, W_RESOLUTIONS
+    global W_IMAGES, W_SIZES, W_PATHS, W_PHASHES, W_RESOLUTIONS, W_HASHES
     global TOTAL_SOURCE_IMAGES, PROCESSED_BASE_COUNT
 
     # --- 再開情報の読み込みと初期化 ---
@@ -835,7 +852,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         log_processing_stats("中断")
         return
 
-    cached_paths, cached_images, cached_sizes, cached_phashes, cached_resolutions = cached
+    cached_paths, cached_images, cached_sizes, cached_phashes, cached_resolutions, cached_hashes = cached
     n = len(cached_paths)
     TOTAL_SOURCE_IMAGES = n
     PROCESSED_BASE_COUNT = 0
@@ -848,6 +865,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     cached_sizes       = [cached_sizes[i] for i in order]
     cached_phashes     = [cached_phashes[i] for i in order]
     cached_resolutions = [cached_resolutions[i] for i in order]
+    cached_hashes      = [cached_hashes[i] for i in order]
 
     # 再ソート後の枚数 n は変わらない
     if n < 2:
@@ -869,7 +887,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     PROGRESS_MODE = "compare"
     BASE_START_DONE = 0
     BASE_START_TIME = time.time()
-    print_compare_progress(0, total_pairs)
+    print_compare_progress(CURRENT_PROGRESS, total_pairs)
 
     # --- 比較元が変わったときに呼ばれる処理 ---
     def on_new_base(i: int):
@@ -950,6 +968,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     W_PATHS        = cached_paths
     W_PHASHES      = cached_phashes
     W_RESOLUTIONS  = cached_resolutions
+    W_HASHES       = cached_hashes
 
     exe = ThreadPoolExecutor(max_workers=workers)
 
@@ -996,8 +1015,8 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
                     print_compare_progress(CURRENT_PROGRESS, TOTAL_PROGRESS)
                     continue
 
-                # ★ 9 要素すべてを unpack（解像度も受け取る）
-                i, j, a, b, score, sa, sb, ra, rb = res
+                # ★ 10 要素すべてを unpack（解像度やSHA一致フラグを受け取る）
+                i, j, a, b, score, sa, sb, ra, rb, sha_match = res
                 CURRENT_PROGRESS += 1
                 print_compare_progress(CURRENT_PROGRESS, TOTAL_PROGRESS)
 
@@ -1008,7 +1027,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
                 if a in moved or b in moved:
                     continue
 
-                if score >= threshold:
+                if sha_match or score >= threshold:
                     # ★ ra / rb には (width, height) が入っている
                     (width_a, height_a) = ra
                     (width_b, height_b) = rb
@@ -1021,7 +1040,10 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
                     dst = os.path.join(dup_dir, os.path.basename(smaller))
                     moved.add(smaller)
-                    log(f"[🧩 重複検出] SSIM={score:.4f} → {smaller} を移動")
+                    if sha_match:
+                        log(f"[♻ SHA-1一致] {smaller} を移動するわ。")
+                    else:
+                        log(f"[🧩 重複検出] SSIM={score:.4f} → {smaller} を移動")
                     safe(
                         shutil.move,
                         smaller,

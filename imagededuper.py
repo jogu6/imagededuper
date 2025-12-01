@@ -24,7 +24,7 @@ def handle_resume_choice(resume_path: str) -> bool:
     if not os.path.exists(resume_path):
         return True
 
-    print("\n=== 中断データが見つかったわ ===")
+        print("\n=== 中断データが見つかりました ===")
     print("  [1] 続きから再開")
     print("  [2] 最初からやり直す")
     print("  [3] キャンセルして終了")
@@ -37,9 +37,9 @@ def handle_resume_choice(resume_path: str) -> bool:
         log("[選択] 最初から再処理します。")
         try:
             os.remove(resume_path)
-            log("[再開データ削除] 古い再開情報を削除したわ。")
+            log("[再開データ削除] 古い再開情報を削除しました。")
         except OSError:
-            log("[エラー] 再開データを削除できなかったわ。")
+            log("[エラー] 再開データを削除できませんでした。")
             return False
         return True
     if choice == "3":
@@ -58,7 +58,7 @@ def main():
 
     folder = input("対象フォルダを入力してください: ").strip().strip('"')
     if not os.path.isdir(folder):
-        log(f"[エラー] フォルダが存在しないわ: {folder}")
+        log(f"[エラー] フォルダが存在しません: {folder}")
         sys.exit(1)
 
     resume_path = os.path.join(folder, RESUME_FILE_NAME)

@@ -576,7 +576,7 @@ def cache_all_images(paths: list[str]):
 
     for idx, path in enumerate(paths, start=1):
         if quit_requested():
-            log("読み込み中に中断操作を検知したわ。")
+            log("読み込み中に中断操作を検知したため処理を停止します。")
             return None
 
         print_loading_progress(idx, total)
@@ -822,7 +822,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     cached_hashes = [cached_hashes[i] for i in order]
 
     if n < 2:
-        log("比較対象が1枚しかないから処理することがないわ。")
+        log("比較対象が1枚しかないため、実行する処理がありません。")
         set_processed_base_count(n)
         log_processing_stats("完了")
         return
@@ -985,7 +985,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
     if os.path.exists(resume_path):
         os.remove(resume_path)
-        log("[🗑 再開データ削除] 正常終了したから resume.json を削除したわ。")
+        log("[🗑 再開データ削除] 正常終了したため resume.json を削除しました。")
 
     set_processed_base_count(n)
     log_processing_stats("完了")

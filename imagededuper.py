@@ -17,6 +17,10 @@ from core import install_silent_keyboardinterrupt_hook, log, move_duplicates, sa
 
 
 def handle_resume_choice(resume_path: str) -> bool:
+    """用途: resume ファイルの有無に応じて再開・再実行・キャンセルを選択させる。
+    引数:
+        resume_path: 再開情報ファイルのパス。
+    戻り値: 続行すべきなら True。キャンセルやエラーの場合は False。"""
     if not os.path.exists(resume_path):
         return True
 
@@ -47,6 +51,9 @@ def handle_resume_choice(resume_path: str) -> bool:
 
 
 def main():
+    """用途: CLI からフォルダパスを受け取り、重複検出処理を起動する。
+    引数: なし（標準入力を利用）。
+    戻り値: なし。"""
     install_silent_keyboardinterrupt_hook()
 
     folder = input("対象フォルダを入力してね: ").strip().strip('"')

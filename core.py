@@ -58,7 +58,9 @@ W_HASHES = None
 
 
 def _format_timestamp_with_delta():
-    """ログラベル用のタイムスタンプ（直近出力との差分付き）を生成する。"""
+    """用途: ログラベル用のタイムスタンプ（直近との差分付き）を生成する。
+    引数: なし。
+    戻り値: "[YYYYMMDD HHMMSS ΔΔΔΔΔΔ]" 形式の文字列。"""
     global _last_log_time
     now = datetime.now()
     ts = now.strftime("%Y%m%d %H%M%S")
@@ -78,7 +80,10 @@ def _format_timestamp_with_delta():
 
 
 def _base_log(msg: str):
-    """進捗バーを気にせずに素のログを出力し、ファイルにも書き込む。"""
+    """用途: 進捗バーに干渉せずコンソールとファイルへログを出力する。
+    引数:
+        msg: 出力したいメッセージ（複数行可）。
+    戻り値: なし。"""
     global _last_log_line
     log_name = f"imagededuper_{datetime.now().strftime('%Y%m')}.log"
     logfile = os.path.join(LOG_DIR, log_name)
@@ -101,7 +106,11 @@ def _base_log(msg: str):
 
 
 def _write_traceback_log(desc: str, exc: Exception):
-    """例外発生時の詳細トレースバックを専用ファイルへ追記する。"""
+    """用途: 例外発生時の詳細トレースバックを専用ファイルへ追記する。
+    引数:
+        desc: どの処理で失敗したかを示す説明文。
+        exc: 捕捉した例外オブジェクト。
+    戻り値: なし。"""
     today = datetime.now().strftime("%Y%m%d")
     tb_file = os.path.join(LOG_DIR, f"error_traceback_{today}.log")
     ts = _format_timestamp_with_delta()
@@ -121,14 +130,20 @@ def _write_traceback_log(desc: str, exc: Exception):
 
 
 def log(msg: str):
-    """進捗バーを一時的に隠してからログ出力し、終わったら進捗を再描画する。"""
+    """用途: 進捗バーを一時的に隠してログ出力し、終わったら進捗を再描画する。
+    引数:
+        msg: 表示・記録したいテキスト。
+    戻り値: なし。"""
     _clear_progress_line()
     _base_log(msg)
     redraw_progress()
 
 
 def log_processing_stats(label: str):
-    """経過時間と処理済み基準画像数をまとめてログに出す。"""
+    """用途: 経過時間と処理済み基準画像数をまとめてログに出す。
+    引数:
+        label: 「完了」「中断」などの状況を示す文字列。
+    戻り値: なし。"""
     elapsed = time.time() - MOVE_START_TIME if MOVE_START_TIME else 0.0
     h = int(elapsed // 3600)
     m = int((elapsed % 3600) // 60)
@@ -140,7 +155,14 @@ def log_processing_stats(label: str):
 
 
 def save_resume(resume_path: str, i: int, j: int, moved: set[str], progress: int):
-    """再開に必要な情報を JSON 形式で保存する。"""
+    """用途: 再開に必要な情報を JSON ファイルとして保存する。
+    引数:
+        resume_path: 保存先のファイルパス。
+        i: 次回の基準インデックス。
+        j: 次回の比較インデックス。
+        moved: 既に duplicates へ移動したファイル集合。
+        progress: 現在の比較済みペア数。
+    戻り値: なし。"""
     data = {
         "i": i,
         "j": j,
@@ -152,7 +174,10 @@ def save_resume(resume_path: str, i: int, j: int, moved: set[str], progress: int
 
 
 def load_resume(resume_path: str):
-    """保存済みの再開データを読み取って返す。"""
+    """用途: 保存済みの再開データを読み取って返す。
+    引数:
+        resume_path: 読み込む JSON ファイルのパス。
+    戻り値: 再開情報の辞書。存在しない場合は None。"""
     if not os.path.exists(resume_path):
         return None
     with open(resume_path, "r", encoding="utf-8") as f:
@@ -160,14 +185,20 @@ def load_resume(resume_path: str):
 
 
 def _clear_progress_line():
-    """進捗バー用の行を消去し、カーソルを先頭へ戻す。"""
+    """用途: 進捗バー用の行を消去し、カーソルを先頭へ戻す。
+    引数: なし。
+    戻り値: なし。"""
     sys.stdout.write("\r")
     sys.stdout.write("\033[K")
     sys.stdout.flush()
 
 
 def print_loading_progress(done: int, total: int):
-    """読み込みフェーズの進捗バーを描画する。"""
+    """用途: 読み込みフェーズの進捗バーを描画・更新する。
+    引数:
+        done: 現在までに読み込んだ枚数。
+        total: 全体枚数。
+    戻り値: なし。"""
     global PROGRESS_MODE, LOAD_DONE, LOAD_TOTAL, CURRENT_ETA_STR, LOAD_LAST_PERCENT
     PROGRESS_MODE = "load"
     LOAD_DONE = done
@@ -193,7 +224,11 @@ def print_loading_progress(done: int, total: int):
 
 
 def compute_load_eta(done: int, total: int) -> str:
-    """現在の読み込み枚数から終了予定時刻を推定する。"""
+    """用途: 現在の読み込み枚数から終了予定時刻を推定する。
+    引数:
+        done: 現時点で処理済みの枚数。
+        total: 全体枚数。
+    戻り値: 推定終了時刻（文字列）。"""
     if done == 0:
         return "計測中"
 
@@ -205,7 +240,11 @@ def compute_load_eta(done: int, total: int) -> str:
 
 
 def print_compare_progress(done: int, total: int):
-    """比較フェーズの進捗バーを描画する。"""
+    """用途: 比較フェーズの進捗バーを描画・更新する。
+    引数:
+        done: 比較済みペア数。
+        total: 全ペア数。
+    戻り値: なし。"""
     global CURRENT_PROGRESS, TOTAL_PROGRESS, PROGRESS_MODE
     CURRENT_PROGRESS = done
     TOTAL_PROGRESS = total
@@ -224,7 +263,9 @@ def print_compare_progress(done: int, total: int):
 
 
 def redraw_progress():
-    """直前のログ出力で消えた進捗表示を復元する。"""
+    """用途: 直前のログ出力で消えた進捗表示を復元する。
+    引数: なし。
+    戻り値: なし。"""
     if PROGRESS_MODE == "load":
         print_loading_progress(LOAD_DONE, LOAD_TOTAL)
     elif PROGRESS_MODE == "compare":
@@ -232,46 +273,71 @@ def redraw_progress():
 
 
 def update_move_start_time():
-    """比較処理の開始時刻を記録し直す。"""
+    """用途: 比較処理の開始時刻を記録し直す。
+    引数: なし。
+    戻り値: なし。"""
     global MOVE_START_TIME
     MOVE_START_TIME = time.time()
 
 
 def set_total_source_images(count: int):
-    """総画像枚数カウンタを更新する。"""
+    """用途: 対象となる総画像枚数カウンタを更新する。
+    引数:
+        count: 画像枚数。
+    戻り値: なし。"""
     global TOTAL_SOURCE_IMAGES
     TOTAL_SOURCE_IMAGES = count
 
 
 def set_processed_base_count(count: int):
-    """現在までに扱った基準画像数を記録する。"""
+    """用途: 現在までに扱った基準画像数を記録する。
+    引数:
+        count: 基準画像のインデックス数。
+    戻り値: なし。"""
     global PROCESSED_BASE_COUNT
     PROCESSED_BASE_COUNT = count
 
 
 def increment_progress(delta: int = 1):
-    """比較済みペア数を加算する。"""
+    """用途: 比較済みペア数カウンタを加算する。
+    引数:
+        delta: 増分（デフォルト1）。
+    戻り値: なし。"""
     global CURRENT_PROGRESS
     CURRENT_PROGRESS += delta
 
 
 def set_progress(value: int):
-    """比較済みペア数を直接設定する。"""
+    """用途: 比較済みペア数カウンタを直接設定する。
+    引数:
+        value: 新しい比較済みペア数。
+    戻り値: なし。"""
     global CURRENT_PROGRESS
     CURRENT_PROGRESS = value
 
 
 def _backoff(attempt: int):
-    """指数バックオフでリトライ前の待機時間を調整する。"""
+    """用途: 指数バックオフでリトライ前の待機時間を調整する。
+    引数:
+        attempt: 0 起算の試行回数。
+    戻り値: なし。"""
     delay = min(30, (2**attempt) + random.uniform(0, 1))
     time.sleep(delay)
 
 
 def install_silent_keyboardinterrupt_hook():
-    """KeyboardInterrupt のときだけトレースバックを抑制する excepthook を仕込む。"""
+    """用途: KeyboardInterrupt のときだけトレースバックを抑制する excepthook を仕込む。
+    引数: なし。
+    戻り値: なし。"""
     old_hook = sys.excepthook
 
     def _hook(exc_type, exc, tb):
+        """用途: KeyboardInterrupt を握りつぶし、それ以外は元の hook へ渡す。
+        引数:
+            exc_type: 例外クラス。
+            exc: 例外インスタンス。
+            tb: トレースバック。
+        戻り値: なし。"""
         if exc_type is KeyboardInterrupt:
             return
         old_hook(exc_type, exc, tb)
@@ -280,7 +346,13 @@ def install_silent_keyboardinterrupt_hook():
 
 
 def safe(func, *args, desc="処理", retries=0, **kwargs):
-    """例外に強いリトライ付きラッパーで任意の関数を実行する。"""
+    """用途: 例外に強いリトライ付きラッパーで任意の関数を実行する。
+    引数:
+        func: 呼び出す関数。
+        *args/**kwargs: func へ渡す引数。
+        desc: ログに表示する処理名。
+        retries: 最大リトライ回数。
+    戻り値: func の戻り値。全試行失敗時は None。"""
     for attempt in range(retries + 1):
         try:
             return func(*args, **kwargs)
@@ -300,12 +372,18 @@ def safe(func, *args, desc="処理", retries=0, **kwargs):
 
 
 def quit_requested():
-    """コンソールで q/Q が押されていないかを調べる。"""
+    """用途: コンソールで q/Q が押されていないかを調べる。
+    引数: なし。
+    戻り値: 押されていれば True。"""
     return msvcrt.kbhit() and msvcrt.getch() in (b"q", b"Q")
 
 
 def compute_file_sha1(path: str, chunk: int = 1024 * 1024) -> str:
-    """ファイルの SHA-1 ハッシュ値を計算する。"""
+    """用途: ファイルの SHA-1 ハッシュ値を計算する。
+    引数:
+        path: 対象ファイルのパス。
+        chunk: 読み込みチャンクサイズ（バイト）。
+    戻り値: 40文字の SHA-1 文字列。"""
     h = hashlib.sha1()
     with open(path, "rb") as f:
         while True:
@@ -317,8 +395,18 @@ def compute_file_sha1(path: str, chunk: int = 1024 * 1024) -> str:
 
 
 def safe_rename_with_hash(src: str, dst: str, desc: str) -> bool:
-    """rename に失敗した場合でも SHA-1 照合で安全に統一する。"""
+    """用途: rename に失敗した場合でも SHA-1 照合で安全に統一する。
+    引数:
+        src: 元ファイルパス。
+        dst: 目標ファイルパス。
+        desc: ログに出す説明文。
+    戻り値: 統一に成功すれば True。"""
     def _try(a, b):
+        """用途: os.rename を行い成功したか返す簡易ヘルパー。
+        引数:
+            a: 元パス。
+            b: 先パス。
+        戻り値: 常に True（例外が出た場合は safe 側で捕捉）。"""
         os.rename(a, b)
         return True
 
@@ -367,7 +455,11 @@ def safe_rename_with_hash(src: str, dst: str, desc: str) -> bool:
 
 
 def convert_heic_to_jpg(path: str, dup_dir: str) -> str | None:
-    """HEIC/HEIF を JPEG に変換し、元ファイルを duplicates へ退避する。"""
+    """用途: HEIC/HEIF を JPEG に変換し、元ファイルを duplicates へ退避する。
+    引数:
+        path: 変換元ファイルパス。
+        dup_dir: 退避先ディレクトリ。
+    戻り値: 変換後パス。失敗時は None。"""
     try:
         with Image.open(path) as img:
             new_path = os.path.splitext(path)[0] + ".jpg"
@@ -382,7 +474,10 @@ def convert_heic_to_jpg(path: str, dup_dir: str) -> str | None:
 
 
 def rename_jfif_to_jpg(path: str) -> str:
-    """拡張子 .jfif を .jpg に変更する。"""
+    """用途: 拡張子 .jfif を .jpg に変更する。
+    引数:
+        path: 対象ファイルのパス。
+    戻り値: リネーム後のパス（失敗時は元のパス）。"""
     try:
         new_path = os.path.splitext(path)[0] + ".jpg"
         os.rename(path, new_path)
@@ -394,7 +489,10 @@ def rename_jfif_to_jpg(path: str) -> str:
 
 
 def fix_wrong_extension(path: str) -> str:
-    """実際の画像フォーマットに合わせて拡張子を補正する。"""
+    """用途: 実際の画像フォーマットに合わせて拡張子を補正する。
+    引数:
+        path: 対象ファイルのパス。
+    戻り値: 補正後のパス。補正できない場合は元のパス。"""
     try:
         with Image.open(path) as img:
             fmt = (img.format or "").upper()
@@ -424,12 +522,18 @@ def fix_wrong_extension(path: str) -> str:
 
 
 def dct2(a: np.ndarray) -> np.ndarray:
-    """2 次元 DCT を計算するヘルパー。"""
+    """用途: 2 次元 DCT を計算するヘルパー。
+    引数:
+        a: 入力配列。
+    戻り値: DCT 適用後の配列。"""
     return dct_1d(dct_1d(a, axis=0, norm="ortho"), axis=1, norm="ortho")
 
 
 def calc_phash(img_arr: np.ndarray) -> int:
-    """224x224 グレースケール画像から 64bit の pHash を計算する。"""
+    """用途: 224x224 グレースケール画像から 64bit の pHash を計算する。
+    引数:
+        img_arr: 2次元グレースケール配列。
+    戻り値: 64bit の整数ハッシュ。"""
     img = Image.fromarray(img_arr).resize((32, 32), Image.LANCZOS)
     mat = np.asarray(img, dtype=np.float32)
     d = dct2(mat)
@@ -443,12 +547,19 @@ def calc_phash(img_arr: np.ndarray) -> int:
 
 
 def hamming64(a: int, b: int) -> int:
-    """64bit 整数同士のハミング距離を求める。"""
+    """用途: 64bit 整数同士のハミング距離を求める。
+    引数:
+        a: 1つ目のハッシュ。
+        b: 2つ目のハッシュ。
+    戻り値: 異なるビット数。"""
     return (a ^ b).bit_count()
 
 
 def cache_all_images(paths: list[str]):
-    """対象ファイルを読み込み、SSIM 用のキャッシュ一式を作って返す。"""
+    """用途: 対象ファイルを読み込み、SSIM 用のキャッシュ一式を作って返す。
+    引数:
+        paths: 読み込むファイルパス一覧。
+    戻り値: (path, ndarray, サイズ, pHash, 解像度, SHA-1) のタプル。"""
     global LOAD_START_TIME, LOAD_LAST_PERCENT, CURRENT_ETA_STR
     LOAD_START_TIME = time.time()
     LOAD_LAST_PERCENT = -1
@@ -499,7 +610,9 @@ def cache_all_images(paths: list[str]):
 
 
 def get_optimal_workers():
-    """CPU コア数からスレッドプールの適切な worker 数を推定する。"""
+    """用途: CPU コア数からスレッドプールの適切な worker 数を推定する。
+    引数: なし。
+    戻り値: 推奨する worker 数（整数）。"""
     phys = psutil.cpu_count(logical=False)
     logi = psutil.cpu_count(logical=True)
 
@@ -512,7 +625,11 @@ hamming_cache = {}
 
 
 def fast_hamming(a, b):
-    """pHash のハミング距離をキャッシュ付きで高速に求める。"""
+    """用途: pHash のハミング距離をキャッシュ付きで高速に求める。
+    引数:
+        a: 1つ目の pHash。
+        b: 2つ目の pHash。
+    戻り値: ハミング距離。"""
     key = (a << 64) | b
     if key in hamming_cache:
         return hamming_cache[key]
@@ -522,7 +639,10 @@ def fast_hamming(a, b):
 
 
 def set_worker_data(images, sizes, paths, phashes, resolutions, hashes):
-    """比較ワーカーが参照するグローバルデータを設定する。"""
+    """用途: 比較ワーカーが参照するグローバルデータを設定する。
+    引数:
+        images/sizes/paths/phashes/resolutions/hashes: 各種キャッシュ済みデータ。
+    戻り値: なし。"""
     global W_IMAGES, W_SIZES, W_PATHS, W_PHASHES, W_RESOLUTIONS, W_HASHES
     W_IMAGES = images
     W_SIZES = sizes
@@ -533,12 +653,18 @@ def set_worker_data(images, sizes, paths, phashes, resolutions, hashes):
 
 
 def clear_worker_data():
-    """比較ワーカー用のグローバルデータをクリアする。"""
+    """用途: 比較ワーカー用のグローバルデータをクリアする。
+    引数: なし。
+    戻り値: なし。"""
     set_worker_data(None, None, None, None, None, None)
 
 
 def ssim_task(pair):
-    """1 ペアの SHA-1 / pHash / SSIM 判定を行い、結果を返す。"""
+    """用途: 1 ペアの SHA-1 / pHash / SSIM 判定を行い、結果を返す。
+    引数:
+        pair: (i, j) のインデックスタプル。
+    戻り値: (i, j, パス×2, SSIM, サイズ×2, 解像度×2, SHA一致フラグ)。
+        pHash 除外時は None、割り込み時は "INTERRUPT"。"""
     try:
         i, j = pair
         sha_match = False
@@ -580,7 +706,12 @@ def ssim_task(pair):
 
 
 def compute_next_pair(i: int, j: int, n: int) -> tuple[int, int]:
-    """現在の (i, j) に続く比較ペアを計算する。"""
+    """用途: 現在の (i, j) に続く比較ペアを計算する。
+    引数:
+        i: 基準画像インデックス。
+        j: 比較画像インデックス。
+        n: 画像枚数。
+    戻り値: 次に処理すべき (i, j)。"""
     j = j + 1
     if j <= i:
         j = i + 1
@@ -595,7 +726,11 @@ def compute_next_pair(i: int, j: int, n: int) -> tuple[int, int]:
 
 
 def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD):
-    """指定フォルダ内の重複画像を検出し、duplicates へ移動するメイン処理。"""
+    """用途: 指定フォルダ内の重複画像を検出し、duplicates へ移動するメイン処理。
+    引数:
+        folder_path: 対象フォルダ。
+        threshold: SSIM 閾値。
+    戻り値: なし。"""
     resume_path = os.path.join(folder_path, RESUME_FILE_NAME)
     resume = load_resume(resume_path)
     is_resume = resume is not None
@@ -705,6 +840,10 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     print_compare_progress(current_progress, total_pairs)
 
     def on_new_base(i: int):
+        """用途: 基準画像が切り替わった際にログ・ETA・再開情報を更新する。
+        引数:
+            i: 新しい基準画像のインデックス。
+        戻り値: なし。"""
         global CURRENT_ETA_STR
         set_processed_base_count(i)
         if current_progress <= 0 or current_progress < total_pairs * 0.01:
@@ -723,6 +862,9 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         log(f"[比較] 基準画像 {i+1}/{n}: {os.path.basename(cached_paths[i])}")
 
     def pair_gen():
+        """用途: 現在の状態から順番に (i, j) ペアを生成する。
+        引数: なし（外側スコープの状態を利用）。
+        戻り値: (i, j) タプルを yield するジェネレータ。"""
         current_i = None
         i = start_i if is_resume else 0
         j = start_j if is_resume else 1

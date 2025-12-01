@@ -742,7 +742,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         current_progress = int(resume.get("current_progress", 0))
         set_progress(current_progress)
         set_processed_base_count(start_i)
-        log(f"[⏸️→▶️ 再開] i={start_i}, j={start_j} から再開するわ。")
+        log(f"[⏸️→▶️ 再開] i={start_i}, j={start_j} から再開する。")
     else:
         start_i = 0
         start_j = 1
@@ -771,7 +771,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
                 all_files.append(os.path.join(root, f))
 
     if not all_files:
-        log("画像が1枚もないので終了するわ。")
+        log("画像が1枚もないので終了する。")
         log_processing_stats("完了")
         return
 
@@ -804,7 +804,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
     cached = cache_all_images(final)
     if cached is None:
-        log("読み込みが中断されたから、比較処理には進まずに終了するわ。")
+        log("読み込みが中断されたから、比較処理には進まずに終了する。")
         log_processing_stats("中断")
         return
 
@@ -830,7 +830,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     total_pairs = n * (n - 1) // 2
     workers = get_optimal_workers()
     log(f"[比較設定] 画像数={n}, 組み合わせ={total_pairs}, workers={workers}")
-    log("[🔍 比較] pHash で候補を絞り、その中だけ SSIM で最終判定するわ。")
+    log("[🔍 比較] pHash で候補を絞り、その中だけ SSIM で最終判定する。")
 
     if not is_resume:
         current_progress = 0
@@ -957,7 +957,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
                     dst = os.path.join(dup_dir, os.path.basename(smaller))
                     moved.add(smaller)
                     if sha_match:
-                        log(f"[♻ SHA-1一致] {smaller} を移動するわ。")
+                        log(f"[♻ SHA-1一致] {smaller} を移動する。")
                     else:
                         log(f"[🧩 重複検出] SSIM={score:.4f} → {smaller} を移動")
                     safe(shutil.move, smaller, dst, desc="重複移動", retries=2)
@@ -976,7 +976,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         ni, nj = compute_next_pair(last_i, last_j, n)
         save_resume(resume_path, ni, nj, moved, current_progress)
         log_processing_stats("中断")
-        log("中断操作を検知したから、中断位置を保存して終了するわ。")
+        log("中断操作を検知したから、中断位置を保存して終了する。")
         return
 
     finally:

@@ -1,4 +1,4 @@
-"""アプリ全体で共有する設定値やパス定義。"""
+"""Shared configuration values and common path definitions for the app."""
 
 from pathlib import Path
 
@@ -6,9 +6,10 @@ BASE_DIR = Path(__file__).resolve().parent
 LOG_DIR = BASE_DIR / "log"
 LOG_DIR.mkdir(exist_ok=True)
 
-# --- 利用者が変更してもよい設定 ---
-DEBUG_LOG_SSIM = False  # True にすると SSIM の詳細ログを出力
-DEFAULT_SSIM_THRESHOLD = 0.85  # SSIM がこの値以上なら重複とみなす
-PHASH_THRESHOLD = 40  # pHash の距離がこの値以下なら SSIM を計算
-PROGRESS_BAR_WIDTH = 30  # 読み込み・比較フェーズで表示する進捗バーの幅
-RESUME_FILE_NAME = "resume.json"  # 中断・再開情報の保存ファイル名
+# --- Settings the user may safely customize ---
+LANGUAGE = "en"  # "en" for English, "ja" for Japanese
+DEBUG_LOG_SSIM = False  # Enable verbose SSIM logging when True
+DEFAULT_SSIM_THRESHOLD = 0.85  # Images at or above this SSIM score count as duplicates
+PHASH_THRESHOLD = 40  # Run SSIM when the pHash distance is at or below this value
+PROGRESS_BAR_WIDTH = 30  # Width of the progress bars during load and compare phases
+RESUME_FILE_NAME = "resume.json"  # Filename used to store resume / checkpoint data

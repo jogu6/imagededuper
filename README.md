@@ -109,6 +109,13 @@ python imagededuper.py
 | `DEBUG_LOG_SSIM` | True で SSIM の詳細ログを出力 | Enable verbose SSIM logs |
 | `PROGRESS_BAR_WIDTH` | 進捗バーの幅（文字数） | Width of progress bars |
 | `RESUME_FILE_NAME` | 中断情報ファイル名 | Filename used for resume data |
+| `LANGUAGE` | `"ja"` / `"en"` を選択してログ・CLI 表示を切り替え | Switch CLI/log language between `"ja"` and `"en"` |
+
+### 言語設定 / Localization
+
+- `config.py` の `LANGUAGE` 変数で既定言語を切り替えられます（既定は `"en"`）。  
+- 表示テキストは `locales/en.json` と `locales/ja.json` に定義されています。必要に応じてこれらの JSON を編集・追加してカスタム翻訳を利用できます。  
+- 新しい言語を追加する場合は `locales/<lang>.json` を作成し、`LANGUAGE` にその `<lang>` コードを指定してください。
 
 ---
 

@@ -1,4 +1,4 @@
-"""重複検出ロジック全体（ログ・進捗・比較・前処理）をまとめたモジュール。"""
+"""Duplicate detection module that bundles logging, progress, comparison, and preprocessing."""
 
 import hashlib
 import json
@@ -28,6 +28,7 @@ from config import (
     PROGRESS_BAR_WIDTH,
     RESUME_FILE_NAME,
 )
+from i18n import t
 
 pillow_heif.register_heif_opener()
 
@@ -37,7 +38,7 @@ _last_log_line = None
 
 CURRENT_PROGRESS = 0
 TOTAL_PROGRESS = 1
-CURRENT_ETA_STR = "計測中"
+CURRENT_ETA_STR = t("status.estimating")
 LOAD_START_TIME = 0.0
 LOAD_LAST_PERCENT = -1
 PROGRESS_MODE = "none"
@@ -58,9 +59,7 @@ W_HASHES = None
 
 
 def _format_timestamp_with_delta():
-    """用途: ログラベル用のタイムスタンプ（直近との差分付き）を生成する。
-    引数: なし。
-    戻り値: "[YYYYMMDD HHMMSS ΔΔΔΔΔΔ]" 形式の文字列。"""
+    """Return a timestamp string for log labels, including the delta since the last log."""
     global _last_log_time
     now = datetime.now()
     ts = now.strftime("%Y%m%d %H%M%S")
@@ -80,10 +79,7 @@ def _format_timestamp_with_delta():
 
 
 def _base_log(msg: str):
-    """用途: 進捗バーに干渉せずコンソールとファイルへログを出力する。
-    引数:
-        msg: 出力したいメッセージ（複数行可）。
-    戻り値: なし。"""
+    """Write a message to stdout and the rotating log file without breaking progress bars."""
     global _last_log_line
     log_name = f"imagededuper_{datetime.now().strftime('%Y%m')}.log"
     logfile = os.path.join(LOG_DIR, log_name)
@@ -100,17 +96,13 @@ def _base_log(msg: str):
             with open(logfile, "a", encoding="utf-8") as f:
                 f.write(full_msg + "\n")
         except Exception as exc:
-            print(f"[log-error] ログ書き込み失敗: {exc}", flush=True)
+            print(t("log.error_write", exc=exc), flush=True)
         if lines:
             _last_log_line = lines[-1]
 
 
 def _write_traceback_log(desc: str, exc: Exception):
-    """用途: 例外発生時の詳細トレースバックを専用ファイルへ追記する。
-    引数:
-        desc: どの処理で失敗したかを示す説明文。
-        exc: 捕捉した例外オブジェクト。
-    戻り値: なし。"""
+    """Append a detailed traceback entry to a dedicated log file."""
     today = datetime.now().strftime("%Y%m%d")
     tb_file = os.path.join(LOG_DIR, f"error_traceback_{today}.log")
     ts = _format_timestamp_with_delta()
@@ -120,49 +112,43 @@ def _write_traceback_log(desc: str, exc: Exception):
 
     with _log_lock:
         with open(tb_file, "a", encoding="utf-8") as f:
-            f.write("\n" + "─" * 50 + "\n")
-            f.write(f"{ts} imagededuper - {desc}\n")
+            f.write("\n" + "-" * 50 + "\n")
+            f.write(f"{ts} {t('log.traceback_header', desc=desc)}\n")
             if _last_log_line:
                 f.write(_last_log_line + "\n")
             for line in tb_text.strip().splitlines():
                 f.write(f"{ts} {line}\n")
-            f.write("─" * 50 + "\n")
+            f.write("-" * 50 + "\n")
 
 
 def log(msg: str):
-    """用途: 進捗バーを一時的に隠してログ出力し、終わったら進捗を再描画する。
-    引数:
-        msg: 表示・記録したいテキスト。
-    戻り値: なし。"""
+    """Hide the live progress line, log the provided message, then redraw the progress display."""
     _clear_progress_line()
     _base_log(msg)
     redraw_progress()
 
 
-def log_processing_stats(label: str):
-    """用途: 経過時間と処理済み基準画像数をまとめてログに出す。
-    引数:
-        label: 「完了」「中断」などの状況を示す文字列。
-    戻り値: なし。"""
+def log_processing_stats(label_key: str):
+    """Log the total elapsed move time and how many base images finished under the given label."""
     elapsed = time.time() - MOVE_START_TIME if MOVE_START_TIME else 0.0
     h = int(elapsed // 3600)
     m = int((elapsed % 3600) // 60)
     s = int(elapsed % 60)
     log(
-        f"[{label}] 経過時間: {h:02d}:{m:02d}:{s:02d} / "
-        f"処理済み元画像数: {PROCESSED_BASE_COUNT}/{TOTAL_SOURCE_IMAGES}"
+        t(
+            "log.processing_stats",
+            label=t(label_key),
+            h=h,
+            m=m,
+            s=s,
+            processed=PROCESSED_BASE_COUNT,
+            total=TOTAL_SOURCE_IMAGES,
+        )
     )
 
 
 def save_resume(resume_path: str, i: int, j: int, moved: set[str], progress: int):
-    """用途: 再開に必要な情報を JSON ファイルとして保存する。
-    引数:
-        resume_path: 保存先のファイルパス。
-        i: 次回の基準インデックス。
-        j: 次回の比較インデックス。
-        moved: 既に duplicates へ移動したファイル集合。
-        progress: 現在の比較済みペア数。
-    戻り値: なし。"""
+    """Persist everything needed to resume a run."""
     data = {
         "i": i,
         "j": j,
@@ -174,10 +160,7 @@ def save_resume(resume_path: str, i: int, j: int, moved: set[str], progress: int
 
 
 def load_resume(resume_path: str):
-    """用途: 保存済みの再開データを読み取って返す。
-    引数:
-        resume_path: 読み込む JSON ファイルのパス。
-    戻り値: 再開情報の辞書。存在しない場合は None。"""
+    """Load resume data if it exists, otherwise return None."""
     if not os.path.exists(resume_path):
         return None
     with open(resume_path, "r", encoding="utf-8") as f:
@@ -185,20 +168,14 @@ def load_resume(resume_path: str):
 
 
 def _clear_progress_line():
-    """用途: 進捗バー用の行を消去し、カーソルを先頭へ戻す。
-    引数: なし。
-    戻り値: なし。"""
+    """Erase the progress bar line and reset the cursor."""
     sys.stdout.write("\r")
     sys.stdout.write("\033[K")
     sys.stdout.flush()
 
 
 def print_loading_progress(done: int, total: int):
-    """用途: 読み込みフェーズの進捗バーを描画・更新する。
-    引数:
-        done: 現在までに読み込んだ枚数。
-        total: 全体枚数。
-    戻り値: なし。"""
+    """Update the progress bar while images are being loaded."""
     global PROGRESS_MODE, LOAD_DONE, LOAD_TOTAL, CURRENT_ETA_STR, LOAD_LAST_PERCENT
     PROGRESS_MODE = "load"
     LOAD_DONE = done
@@ -217,20 +194,23 @@ def print_loading_progress(done: int, total: int):
     bar = "#" * filled + "." * (PROGRESS_BAR_WIDTH - filled)
 
     sys.stdout.write(
-        f"\r[読込] [{bar}] {percent:3d}% ({done}/{total}) 終了予定 {CURRENT_ETA_STR}  [q:⛔ 中断]"
+        t(
+            "progress.load_line",
+            bar=bar,
+            percent=percent,
+            done=done,
+            total=total,
+            eta=CURRENT_ETA_STR,
+        )
     )
     sys.stdout.flush()
     LOAD_LAST_PERCENT = percent
 
 
 def compute_load_eta(done: int, total: int) -> str:
-    """用途: 現在の読み込み枚数から終了予定時刻を推定する。
-    引数:
-        done: 現時点で処理済みの枚数。
-        total: 全体枚数。
-    戻り値: 推定終了時刻（文字列）。"""
+    """Estimate the finish time based on the number of files loaded so far."""
     if done == 0:
-        return "計測中"
+        return t("status.estimating")
 
     elapsed = time.time() - LOAD_START_TIME
     speed = elapsed / done
@@ -240,11 +220,7 @@ def compute_load_eta(done: int, total: int) -> str:
 
 
 def print_compare_progress(done: int, total: int):
-    """用途: 比較フェーズの進捗バーを描画・更新する。
-    引数:
-        done: 比較済みペア数。
-        total: 全ペア数。
-    戻り値: なし。"""
+    """Update the progress bar while performing comparisons."""
     global CURRENT_PROGRESS, TOTAL_PROGRESS, PROGRESS_MODE
     CURRENT_PROGRESS = done
     TOTAL_PROGRESS = total
@@ -257,15 +233,20 @@ def print_compare_progress(done: int, total: int):
     filled = int(PROGRESS_BAR_WIDTH * ratio)
     bar = "#" * filled + "." * (PROGRESS_BAR_WIDTH - filled)
     sys.stdout.write(
-        f"\r[進捗] [{bar}] {ratio*100:6.2f}% ({done}/{total}) 終了予定: {CURRENT_ETA_STR}  [q:⛔ 中断]"
+        t(
+            "progress.compare_line",
+            bar=bar,
+            percent=ratio * 100,
+            done=done,
+            total=total,
+            eta=CURRENT_ETA_STR,
+        )
     )
     sys.stdout.flush()
 
 
 def redraw_progress():
-    """用途: 直前のログ出力で消えた進捗表示を復元する。
-    引数: なし。
-    戻り値: なし。"""
+    """Redraw the most recent progress bar after a log line hides it."""
     if PROGRESS_MODE == "load":
         print_loading_progress(LOAD_DONE, LOAD_TOTAL)
     elif PROGRESS_MODE == "compare":
@@ -273,71 +254,47 @@ def redraw_progress():
 
 
 def update_move_start_time():
-    """用途: 比較処理の開始時刻を記録し直す。
-    引数: なし。
-    戻り値: なし。"""
+    """Record (or reset) the start time for the comparison / move phase."""
     global MOVE_START_TIME
     MOVE_START_TIME = time.time()
 
 
 def set_total_source_images(count: int):
-    """用途: 対象となる総画像枚数カウンタを更新する。
-    引数:
-        count: 画像枚数。
-    戻り値: なし。"""
+    """Store the total number of source images being processed."""
     global TOTAL_SOURCE_IMAGES
     TOTAL_SOURCE_IMAGES = count
 
 
 def set_processed_base_count(count: int):
-    """用途: 現在までに扱った基準画像数を記録する。
-    引数:
-        count: 基準画像のインデックス数。
-    戻り値: なし。"""
+    """Record how many base images have been processed so far."""
     global PROCESSED_BASE_COUNT
     PROCESSED_BASE_COUNT = count
 
 
 def increment_progress(delta: int = 1):
-    """用途: 比較済みペア数カウンタを加算する。
-    引数:
-        delta: 増分（デフォルト1）。
-    戻り値: なし。"""
+    """Increment the processed pair counter."""
     global CURRENT_PROGRESS
     CURRENT_PROGRESS += delta
 
 
 def set_progress(value: int):
-    """用途: 比較済みペア数カウンタを直接設定する。
-    引数:
-        value: 新しい比較済みペア数。
-    戻り値: なし。"""
+    """Set the processed pair counter to the provided value."""
     global CURRENT_PROGRESS
     CURRENT_PROGRESS = value
 
 
 def _backoff(attempt: int):
-    """用途: 指数バックオフでリトライ前の待機時間を調整する。
-    引数:
-        attempt: 0 起算の試行回数。
-    戻り値: なし。"""
+    """Sleep with exponential backoff (plus jitter) before the next retry."""
     delay = min(30, (2**attempt) + random.uniform(0, 1))
     time.sleep(delay)
 
 
 def install_silent_keyboardinterrupt_hook():
-    """用途: KeyboardInterrupt のときだけトレースバックを抑制する excepthook を仕込む。
-    引数: なし。
-    戻り値: なし。"""
+    """Install an excepthook that suppresses tracebacks for KeyboardInterrupt."""
     old_hook = sys.excepthook
 
     def _hook(exc_type, exc, tb):
-        """用途: KeyboardInterrupt を握りつぶし、それ以外は元の hook へ渡す。
-        引数:
-            exc_type: 例外クラス。
-            exc: 例外インスタンス。
-            tb: トレースバック。
-        戻り値: なし。"""
+        """Handle Ctrl+C quietly and delegate everything else to the original hook."""
         if exc_type is KeyboardInterrupt:
             return
         old_hook(exc_type, exc, tb)
@@ -345,14 +302,8 @@ def install_silent_keyboardinterrupt_hook():
     sys.excepthook = _hook
 
 
-def safe(func, *args, desc="処理", retries=0, **kwargs):
-    """用途: 例外に強いリトライ付きラッパーで任意の関数を実行する。
-    引数:
-        func: 呼び出す関数。
-        *args/**kwargs: func へ渡す引数。
-        desc: ログに表示する処理名。
-        retries: 最大リトライ回数。
-    戻り値: func の戻り値。全試行失敗時は None。"""
+def safe(func, *args, desc=None, retries=0, **kwargs):
+    """Call `func` with retries and log failures in a consistent format."""
     for attempt in range(retries + 1):
         try:
             return func(*args, **kwargs)
@@ -362,28 +313,23 @@ def safe(func, *args, desc="処理", retries=0, **kwargs):
 
         except Exception as exc:
             is_final = attempt >= retries
-            msg = f"⚠️ {desc} 失敗 (試行 {attempt+1}/{retries+1})"
+            desc_text = desc or t("desc.generic_operation")
+            msg = t("log.warn_retry", desc=desc_text, current=attempt + 1, total=retries + 1)
             log(msg if not is_final else f"{msg} [traceback]")
             if is_final:
-                _write_traceback_log(desc, exc)
-                log(f"❌ {desc} 完全失敗")
+                _write_traceback_log(desc_text, exc)
+                log(t("log.error_permanent", desc=desc_text))
                 return None
             _backoff(attempt)
 
 
 def quit_requested():
-    """用途: コンソールで q/Q が押されていないかを調べる。
-    引数: なし。
-    戻り値: 押されていれば True。"""
+    """Return True when q/Q was pressed in the console."""
     return msvcrt.kbhit() and msvcrt.getch() in (b"q", b"Q")
 
 
 def compute_file_sha1(path: str, chunk: int = 1024 * 1024) -> str:
-    """用途: ファイルの SHA-1 ハッシュ値を計算する。
-    引数:
-        path: 対象ファイルのパス。
-        chunk: 読み込みチャンクサイズ（バイト）。
-    戻り値: 40文字の SHA-1 文字列。"""
+    """Compute the SHA-1 hash of a file and return it as a hex string."""
     h = hashlib.sha1()
     with open(path, "rb") as f:
         while True:
@@ -395,18 +341,9 @@ def compute_file_sha1(path: str, chunk: int = 1024 * 1024) -> str:
 
 
 def safe_rename_with_hash(src: str, dst: str, desc: str) -> bool:
-    """用途: rename に失敗した場合でも SHA-1 照合で安全に統一する。
-    引数:
-        src: 元ファイルパス。
-        dst: 目標ファイルパス。
-        desc: ログに出す説明文。
-    戻り値: 統一に成功すれば True。"""
+    """Attempt to rename `src` into `dst`, falling back to SHA-1 validation if needed."""
     def _try(a, b):
-        """用途: os.rename を行い成功したか返す簡易ヘルパー。
-        引数:
-            a: 元パス。
-            b: 先パス。
-        戻り値: 常に True（例外が出た場合は safe 側で捕捉）。"""
+        """Wrapper for os.rename so it can be retried via `safe`."""
         os.rename(a, b)
         return True
 
@@ -417,82 +354,72 @@ def safe_rename_with_hash(src: str, dst: str, desc: str) -> bool:
     if not os.path.exists(dst):
         return False
 
-    log(f"[衝突検知] rename失敗 → SHA-1比較へ {os.path.basename(src)}")
+    log(t("log.conflict_rename", name=os.path.basename(src)))
 
     try:
         h_src = compute_file_sha1(src)
         h_dst = compute_file_sha1(dst)
     except Exception as exc:
-        log(f"[ハッシュ比較失敗] {src} / {dst}: {exc}")
+        log(t("log.hash_compare_error", src=src, dst=dst, exc=exc))
         return False
 
     if h_src == h_dst:
-        log(f"[同一判定] {src} と {dst} は内容一致と判定")
+        log(t("log.match_same", src=src, dst=dst))
 
         m_src = os.path.getmtime(src)
         m_dst = os.path.getmtime(dst)
         rem, surv = (src, dst) if m_src < m_dst else (dst, src)
 
-        log(f"[削除] 内容一致 → 古い方を削除: {rem}")
+        log(t("log.delete_old", path=rem))
         try:
             os.remove(rem)
         except Exception as exc:
-            log(f"[削除失敗] {rem}: {exc}")
+            log(t("log.delete_error", path=rem, exc=exc))
             return False
 
         if surv == src:
             try:
                 os.rename(src, dst)
             except Exception as exc:
-                log(f"[再rename失敗] {src} → {dst}: {exc}")
+                log(t("log.rename_error", src=src, dst=dst, exc=exc))
                 return False
 
-        log(f"[統一完了] rename成功 {dst}")
+        log(t("log.rename_success", path=dst))
         return True
 
-    log(f"[統一スキップ] SHA-1不一致 {src} / {dst}")
+    log(t("log.sha_mismatch", src=src, dst=dst))
     return False
 
 
 def convert_heic_to_jpg(path: str, dup_dir: str) -> str | None:
-    """用途: HEIC/HEIF を JPEG に変換し、元ファイルを duplicates へ退避する。
-    引数:
-        path: 変換元ファイルパス。
-        dup_dir: 退避先ディレクトリ。
-    戻り値: 変換後パス。失敗時は None。"""
+    """Convert HEIC/HEIF images to JPEG and move the original into the duplicates folder."""
     try:
         with Image.open(path) as img:
             new_path = os.path.splitext(path)[0] + ".jpg"
             img.convert("RGB").save(new_path, "JPEG", quality=95)
         dst = os.path.join(dup_dir, os.path.basename(path))
         shutil.move(path, dst)
-        log(f"[🔄 HEIC→JPG] {path} → {new_path}")
+        log(t("log.heic_success", src=path, dst=new_path))
         return new_path
     except Exception as exc:
-        log(f"[❌ HEIC変換失敗] {path}: {exc}")
+        log(t("log.heic_fail", path=path, exc=exc))
         return None
 
 
 def rename_jfif_to_jpg(path: str) -> str:
-    """用途: 拡張子 .jfif を .jpg に変更する。
-    引数:
-        path: 対象ファイルのパス。
-    戻り値: リネーム後のパス（失敗時は元のパス）。"""
+    """Rename `.jfif` files to `.jpg`."""
     try:
         new_path = os.path.splitext(path)[0] + ".jpg"
         os.rename(path, new_path)
-        log(f"[🔄 JFIF→JPG] {path} → {new_path}")
+        log(t("log.jfif_success", src=path, dst=new_path))
         return new_path
     except Exception as exc:
-        log(f"[❌ JFIF→JPG失敗] {path}: {exc}")
+        log(t("log.jfif_fail", path=path, exc=exc))
         return path
 
 
 def fix_wrong_extension(path: str) -> str:
-    """用途: 実際の画像フォーマットに合わせて拡張子を補正する。
-    引数:
-        path: 対象ファイルのパス。
-    戻り値: 補正後のパス。補正できない場合は元のパス。"""
+    """Correct file extensions so they match the actual image format."""
     try:
         with Image.open(path) as img:
             fmt = (img.format or "").upper()
@@ -502,7 +429,7 @@ def fix_wrong_extension(path: str) -> str:
             new_path = os.path.splitext(path)[0] + ".jpg"
             if current_ext == ".jpg":
                 return path
-            ok = safe_rename_with_hash(path, new_path, desc="拡張子統一(JPEG)")
+            ok = safe_rename_with_hash(path, new_path, desc=t("desc.extension_normalize_jpeg"))
             return new_path if ok else path
 
         ext_map = {"PNG": ".png", "GIF": ".gif", "WEBP": ".webp", "TIFF": ".tiff", "BMP": ".bmp"}
@@ -511,29 +438,23 @@ def fix_wrong_extension(path: str) -> str:
             if current_ext == correct:
                 return path
             new_path = os.path.splitext(path)[0] + correct
-            ok = safe_rename_with_hash(path, new_path, desc=f"[🔧 拡張子修正]({fmt})")
+            ok = safe_rename_with_hash(path, new_path, desc=t("desc.extension_fix_format", format=fmt))
             return new_path if ok else path
 
         return path
 
     except Exception as exc:
-        log(f"[❌ 拡張子判定失敗] {path}: {exc}")
+        log(t("log.extension_detect_fail", path=path, exc=exc))
         return path
 
 
 def dct2(a: np.ndarray) -> np.ndarray:
-    """用途: 2 次元 DCT を計算するヘルパー。
-    引数:
-        a: 入力配列。
-    戻り値: DCT 適用後の配列。"""
+    """Compute a 2D DCT using scipy's 1D helper twice."""
     return dct_1d(dct_1d(a, axis=0, norm="ortho"), axis=1, norm="ortho")
 
 
 def calc_phash(img_arr: np.ndarray) -> int:
-    """用途: 224x224 グレースケール画像から 64bit の pHash を計算する。
-    引数:
-        img_arr: 2次元グレースケール配列。
-    戻り値: 64bit の整数ハッシュ。"""
+    """Calculate a 64-bit perceptual hash from a 224x224 grayscale image array."""
     img = Image.fromarray(img_arr).resize((32, 32), Image.LANCZOS)
     mat = np.asarray(img, dtype=np.float32)
     d = dct2(mat)
@@ -547,19 +468,12 @@ def calc_phash(img_arr: np.ndarray) -> int:
 
 
 def hamming64(a: int, b: int) -> int:
-    """用途: 64bit 整数同士のハミング距離を求める。
-    引数:
-        a: 1つ目のハッシュ。
-        b: 2つ目のハッシュ。
-    戻り値: 異なるビット数。"""
+    """Return the Hamming distance between two 64-bit integers."""
     return (a ^ b).bit_count()
 
 
 def cache_all_images(paths: list[str]):
-    """用途: 対象ファイルを読み込み、SSIM 用のキャッシュ一式を作って返す。
-    引数:
-        paths: 読み込むファイルパス一覧。
-    戻り値: (path, ndarray, サイズ, pHash, 解像度, SHA-1) のタプル。"""
+    """Load image data and build the SSIM/pHash/SHA-1 caches."""
     global LOAD_START_TIME, LOAD_LAST_PERCENT, CURRENT_ETA_STR
     LOAD_START_TIME = time.time()
     LOAD_LAST_PERCENT = -1
@@ -571,12 +485,12 @@ def cache_all_images(paths: list[str]):
     hashes = []
 
     total = len(paths)
-    log(f"[📥 読込開始] {total} 枚")
-    CURRENT_ETA_STR = "計測中"
+    log(t("log.load_start", total=total))
+    CURRENT_ETA_STR = t("status.estimating")
 
     for idx, path in enumerate(paths, start=1):
         if quit_requested():
-            log("読み込み中に中断操作を検知したため処理を停止します。")
+            log(t("log.load_quit"))
             return None
 
         print_loading_progress(idx, total)
@@ -590,7 +504,7 @@ def cache_all_images(paths: list[str]):
                 g = img.convert("L")
                 arr = np.array(g.resize((224, 224)))
         except Exception as exc:
-            log(f"[⚠️ 読込失敗] {path}: {exc}")
+            log(t("log.load_error", path=path, exc=exc))
             continue
 
         imgs.append(arr)
@@ -601,18 +515,16 @@ def cache_all_images(paths: list[str]):
         try:
             hashes.append(compute_file_sha1(path))
         except Exception as exc:
-            log(f"[⚠️ SHA-1計算失敗] {path}: {exc}")
+            log(t("log.sha1_error", path=path, exc=exc))
             hashes.append("")
 
     _clear_progress_line()
-    log(f"[✅ 読込完了] 有効画像数: {len(valid_paths)}")
+    log(t("log.load_done", count=len(valid_paths)))
     return valid_paths, imgs, sizes, phashes, resolutions, hashes
 
 
 def get_optimal_workers():
-    """用途: CPU コア数からスレッドプールの適切な worker 数を推定する。
-    引数: なし。
-    戻り値: 推奨する worker 数（整数）。"""
+    """Estimate a reasonable ThreadPool worker count based on CPU topology."""
     phys = psutil.cpu_count(logical=False)
     logi = psutil.cpu_count(logical=True)
 
@@ -625,11 +537,7 @@ hamming_cache = {}
 
 
 def fast_hamming(a, b):
-    """用途: pHash のハミング距離をキャッシュ付きで高速に求める。
-    引数:
-        a: 1つ目の pHash。
-        b: 2つ目の pHash。
-    戻り値: ハミング距離。"""
+    """Return the cached pHash distance when available, otherwise compute and cache it."""
     key = (a << 64) | b
     if key in hamming_cache:
         return hamming_cache[key]
@@ -639,10 +547,7 @@ def fast_hamming(a, b):
 
 
 def set_worker_data(images, sizes, paths, phashes, resolutions, hashes):
-    """用途: 比較ワーカーが参照するグローバルデータを設定する。
-    引数:
-        images/sizes/paths/phashes/resolutions/hashes: 各種キャッシュ済みデータ。
-    戻り値: なし。"""
+    """Populate global references so worker threads can access cached data."""
     global W_IMAGES, W_SIZES, W_PATHS, W_PHASHES, W_RESOLUTIONS, W_HASHES
     W_IMAGES = images
     W_SIZES = sizes
@@ -653,18 +558,12 @@ def set_worker_data(images, sizes, paths, phashes, resolutions, hashes):
 
 
 def clear_worker_data():
-    """用途: 比較ワーカー用のグローバルデータをクリアする。
-    引数: なし。
-    戻り値: なし。"""
+    """Reset the worker globals to release references."""
     set_worker_data(None, None, None, None, None, None)
 
 
 def ssim_task(pair):
-    """用途: 1 ペアの SHA-1 / pHash / SSIM 判定を行い、結果を返す。
-    引数:
-        pair: (i, j) のインデックスタプル。
-    戻り値: (i, j, パス×2, SSIM, サイズ×2, 解像度×2, SHA一致フラグ)。
-        pHash 除外時は None、割り込み時は "INTERRUPT"。"""
+    """Evaluate SHA-1/pHash/SSIM for a pair and return the comparison result."""
     try:
         i, j = pair
         sha_match = False
@@ -683,7 +582,7 @@ def ssim_task(pair):
             score = float(ssim(img1, img2, full=False))
 
             if DEBUG_LOG_SSIM:
-                log(f"[DEBUG SSIM] {W_PATHS[i]} vs {W_PATHS[j]} -> SSIM={score:.4f}")
+                log(t("log.debug_ssim", a=W_PATHS[i], b=W_PATHS[j], score=score))
 
         return (
             i,
@@ -706,12 +605,7 @@ def ssim_task(pair):
 
 
 def compute_next_pair(i: int, j: int, n: int) -> tuple[int, int]:
-    """用途: 現在の (i, j) に続く比較ペアを計算する。
-    引数:
-        i: 基準画像インデックス。
-        j: 比較画像インデックス。
-        n: 画像枚数。
-    戻り値: 次に処理すべき (i, j)。"""
+    """Return the next (i, j) pair to process given the current indices."""
     j = j + 1
     if j <= i:
         j = i + 1
@@ -726,11 +620,7 @@ def compute_next_pair(i: int, j: int, n: int) -> tuple[int, int]:
 
 
 def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD):
-    """用途: 指定フォルダ内の重複画像を検出し、duplicates へ移動するメイン処理。
-    引数:
-        folder_path: 対象フォルダ。
-        threshold: SSIM 閾値。
-    戻り値: なし。"""
+    """Main entry point that finds duplicates in `folder_path` and moves them into `duplicates/`."""
     resume_path = os.path.join(folder_path, RESUME_FILE_NAME)
     resume = load_resume(resume_path)
     is_resume = resume is not None
@@ -742,7 +632,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
         current_progress = int(resume.get("current_progress", 0))
         set_progress(current_progress)
         set_processed_base_count(start_i)
-        log(f"[⏸️→▶️ 再開] i={start_i}, j={start_j} から処理を再開します。")
+        log(t("log.resume_continue", start_i=start_i, start_j=start_j))
     else:
         start_i = 0
         start_j = 1
@@ -753,7 +643,7 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
     moved_before = set(moved)
 
-    log(f"=== 開始: 重複画像チェック {folder_path} ===")
+    log(t("log.duplicate_start", folder=folder_path))
     update_move_start_time()
     set_total_source_images(0)
     set_processed_base_count(0)
@@ -771,19 +661,19 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
                 all_files.append(os.path.join(root, f))
 
     if not all_files:
-        log("画像が1枚もないため処理を終了します。")
-        log_processing_stats("完了")
+        log(t("log.no_images"))
+        log_processing_stats("status.done")
         return
 
-    log(f"[収集] {len(all_files)} 枚")
+    log(t("log.collect_count", count=len(all_files)))
 
     estimated_mem_mb = len(all_files) * 0.05
-    log(f"[予定メモリ消費] 約 {estimated_mem_mb:.2f} MB（224x224 グレースケールキャッシュ）")
+    log(t("log.memory_estimate", mb=estimated_mem_mb))
 
     after = []
     for f in all_files:
         if f.lower().endswith((".heic", ".heif")):
-            new = safe(convert_heic_to_jpg, f, dup_dir, desc="HEIC変換", retries=2)
+            new = safe(convert_heic_to_jpg, f, dup_dir, desc=t("desc.heic_conversion"), retries=2)
             if new:
                 after.append(new)
             continue
@@ -792,20 +682,20 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     tmp = []
     for f in after:
         if f.lower().endswith(".jfif"):
-            new = safe(rename_jfif_to_jpg, f, desc="JFIF→JPG", retries=2)
+            new = safe(rename_jfif_to_jpg, f, desc=t("desc.jfif_conversion"), retries=2)
             tmp.append(new if new else f)
             continue
         tmp.append(f)
 
     final = []
     for f in tmp:
-        fixed = safe(fix_wrong_extension, f, desc="拡張子修正", retries=2)
+        fixed = safe(fix_wrong_extension, f, desc=t("desc.extension_fix"), retries=2)
         final.append(fixed if fixed else f)
 
     cached = cache_all_images(final)
     if cached is None:
-        log("読み込みが中断されたため、比較処理には進まず終了します。")
-        log_processing_stats("中断")
+        log(t("log.loading_interrupted"))
+        log_processing_stats("status.interrupted")
         return
 
     cached_paths, cached_images, cached_sizes, cached_phashes, cached_resolutions, cached_hashes = cached
@@ -822,15 +712,15 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     cached_hashes = [cached_hashes[i] for i in order]
 
     if n < 2:
-        log("比較対象が1枚しかないため、実行する処理がありません。")
+        log(t("log.single_image"))
         set_processed_base_count(n)
-        log_processing_stats("完了")
+        log_processing_stats("status.done")
         return
 
     total_pairs = n * (n - 1) // 2
     workers = get_optimal_workers()
-    log(f"[比較設定] 画像数={n}, 組み合わせ={total_pairs}, workers={workers}")
-    log("[🔍 比較] pHash で候補を絞り、その中だけ SSIM で最終判定します。")
+    log(t("log.compare_config", count=n, pairs=total_pairs, workers=workers))
+    log(t("log.compare_strategy"))
 
     if not is_resume:
         current_progress = 0
@@ -840,14 +730,11 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
     print_compare_progress(current_progress, total_pairs)
 
     def on_new_base(i: int):
-        """用途: 基準画像が切り替わった際にログ・ETA・再開情報を更新する。
-        引数:
-            i: 新しい基準画像のインデックス。
-        戻り値: なし。"""
+        """Update ETA, resume data, and logs whenever the base image index changes."""
         global CURRENT_ETA_STR
         set_processed_base_count(i)
         if current_progress <= 0 or current_progress < total_pairs * 0.01:
-            CURRENT_ETA_STR = "計測中"
+            CURRENT_ETA_STR = t("status.estimating")
         else:
             elapsed = time.time() - MOVE_START_TIME
             avg_speed = current_progress / max(elapsed, 1e-6)
@@ -859,12 +746,10 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
             CURRENT_ETA_STR = eta_dt.strftime("%Y-%m-%d %H:%M:%S")
 
         save_resume(resume_path, i, 0, moved, current_progress)
-        log(f"[比較] 基準画像 {i+1}/{n}: {os.path.basename(cached_paths[i])}")
+        log(t("log.compare_base", index=i + 1, total=n, name=os.path.basename(cached_paths[i])))
 
     def pair_gen():
-        """用途: 現在の状態から順番に (i, j) ペアを生成する。
-        引数: なし（外側スコープの状態を利用）。
-        戻り値: (i, j) タプルを yield するジェネレータ。"""
+        """Yield (i, j) pairs sequentially based on the outer scope state."""
         current_i = None
         i = start_i if is_resume else 0
         j = start_j if is_resume else 1
@@ -957,10 +842,10 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
                     dst = os.path.join(dup_dir, os.path.basename(smaller))
                     moved.add(smaller)
                     if sha_match:
-                        log(f"[♻️ SHA-1一致] {smaller} を移動します。")
+                        log(t("log.move_sha", path=smaller))
                     else:
-                        log(f"[🧩 重複検出] SSIM={score:.4f} → {smaller} を移動")
-                    safe(shutil.move, smaller, dst, desc="重複移動", retries=2)
+                        log(t("log.move_ssim", score=score, path=smaller))
+                    safe(shutil.move, smaller, dst, desc=t("desc.move_duplicate"), retries=2)
 
             try:
                 while len(pending) < max_pending:
@@ -975,8 +860,8 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
         ni, nj = compute_next_pair(last_i, last_j, n)
         save_resume(resume_path, ni, nj, moved, current_progress)
-        log_processing_stats("中断")
-        log("中断操作を検知したため、中断位置を保存して終了します。")
+        log_processing_stats("status.interrupted")
+        log(t("log.quit_saved"))
         return
 
     finally:
@@ -985,11 +870,11 @@ def move_duplicates(folder_path: str, threshold: float = DEFAULT_SSIM_THRESHOLD)
 
     if os.path.exists(resume_path):
         os.remove(resume_path)
-        log("[🗑 再開データ削除] 正常終了したため resume.json を削除しました。")
+        log(t("log.resume_cleanup_success"))
 
     set_processed_base_count(n)
-    log_processing_stats("完了")
-    log("=== 🎉 完了 ===")
+    log_processing_stats("status.done")
+    log(t("log.complete_banner"))
 
     new_moved_count = len(moved) - len(moved_before)
-    log(f"今回移動した重複画像枚数: {new_moved_count}")
+    log(t("log.moved_summary", count=new_moved_count))
